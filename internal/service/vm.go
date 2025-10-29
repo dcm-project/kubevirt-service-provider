@@ -3,11 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/dcm-project/service-provider-api/internal/api/server"
 	"github.com/dcm-project/service-provider-api/internal/service/model"
-	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -17,17 +15,11 @@ import (
 )
 
 type VMService struct {
-	client kubecli.KubevirtClient
+	kubeVirtClient kubecli.KubevirtClient
 }
 
-func NewVMService() *VMService {
-	virtClient, err := kubecli.GetKubevirtClientFromClientConfig(
-		kubecli.DefaultClientConfig(&pflag.FlagSet{}),
-	)
-	if err != nil {
-		log.Fatalf("cannot obtain KubeVirt client: %v\n", err)
-	}
-	return &VMService{client: virtClient}
+func NewVMService(virtClient kubecli.KubevirtClient) *VMService {
+	return &VMService{kubeVirtClient: virtClient}
 }
 
 func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSONRequestBody) (model.DeclaredVM, error) {
@@ -49,7 +41,7 @@ func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSO
 	namespace := request.Namespace
 	logger.Info("Creating namespace ", namespace)
 	// Check Namespace exists
-	_, err := v.client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	_, err := v.kubeVirtClient.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
 	if err != nil {
 		// Create Namespace
 		ns := &corev1.Namespace{
@@ -57,7 +49,7 @@ func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSO
 				Name: namespace,
 			},
 		}
-		_, err = v.client.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
+		_, err = v.kubeVirtClient.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 		if err != nil {
 			logger.Error("Error occurred when creating namespace", err)
 			return model.DeclaredVM{}, fmt.Errorf("failed to create namespace %s: %w", namespace, err)
@@ -175,7 +167,7 @@ func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSO
 	}
 
 	// Create the VirtualMachine in the cluster
-	_, err = v.client.VirtualMachine(namespace).Create(ctx, virtualMachine, metav1.CreateOptions{})
+	_, err = v.kubeVirtClient.VirtualMachine(namespace).Create(ctx, virtualMachine, metav1.CreateOptions{})
 	if err != nil {
 		return model.DeclaredVM{}, fmt.Errorf("failed to create VirtualMachine: %w", err)
 	}

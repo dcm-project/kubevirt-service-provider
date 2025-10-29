@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -19,10 +20,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
+	"github.com/spf13/pflag"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"kubevirt.io/client-go/kubecli"
 )
 
 const (
@@ -86,8 +89,21 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 	})
 
+	virtClient, err := kubecli.GetKubevirtClientFromClientConfig(
+		kubecli.DefaultClientConfig(&pflag.FlagSet{}),
+	)
+	if err != nil {
+		log.Fatalf("cannot obtain KubeVirt client: %v\n", err)
+	}
+
+	kubeClientset, err := s.getKubeClient()
+	if err != nil {
+		log.Fatalf("cannot obtain Kube client: %v\n", err)
+	}
+
 	h := handlers.NewServiceHandler(
-		service.NewVMService(),
+		service.NewVMService(virtClient),
+		service.NewClusterResourceService(kubeClientset),
 	)
 
 	// Apply OpenAPI validation middleware to API routes only
