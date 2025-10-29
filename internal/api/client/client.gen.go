@@ -92,15 +92,16 @@ type ClientInterface interface {
 	// ListHealth request
 	ListHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetClusterResources request
+	GetClusterResources(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteVMWithBody request with any body
 	DeleteVMWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	DeleteVM(ctx context.Context, body DeleteVMJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetVMWithBody request with any body
-	GetVMWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	GetVM(ctx context.Context, body GetVMJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetVM request
+	GetVM(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateVMWithBody request with any body
 	CreateVMWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -115,6 +116,18 @@ type ClientInterface interface {
 
 func (c *Client) ListHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListHealthRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetClusterResources(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetClusterResourcesRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -149,20 +162,8 @@ func (c *Client) DeleteVM(ctx context.Context, body DeleteVMJSONRequestBody, req
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetVMWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetVMRequestWithBody(c.Server, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetVM(ctx context.Context, body GetVMJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetVMRequest(c.Server, body)
+func (c *Client) GetVM(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVMRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -248,6 +249,33 @@ func NewListHealthRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewGetClusterResourcesRequest generates requests for GetClusterResources
+func NewGetClusterResourcesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v1/cluster")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewDeleteVMRequest calls the generic DeleteVM builder with application/json body
 func NewDeleteVMRequest(server string, body DeleteVMJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -288,19 +316,8 @@ func NewDeleteVMRequestWithBody(server string, contentType string, body io.Reade
 	return req, nil
 }
 
-// NewGetVMRequest calls the generic GetVM builder with application/json body
-func NewGetVMRequest(server string, body GetVMJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewGetVMRequestWithBody(server, "application/json", bodyReader)
-}
-
-// NewGetVMRequestWithBody generates requests for GetVM with any type of body
-func NewGetVMRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+// NewGetVMRequest generates requests for GetVM
+func NewGetVMRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -318,12 +335,10 @@ func NewGetVMRequestWithBody(server string, contentType string, body io.Reader) 
 		return nil, err
 	}
 
-	req, err := http.NewRequest("GET", queryURL.String(), body)
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -454,15 +469,16 @@ type ClientWithResponsesInterface interface {
 	// ListHealthWithResponse request
 	ListHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListHealthResponse, error)
 
+	// GetClusterResourcesWithResponse request
+	GetClusterResourcesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetClusterResourcesResponse, error)
+
 	// DeleteVMWithBodyWithResponse request with any body
 	DeleteVMWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteVMResponse, error)
 
 	DeleteVMWithResponse(ctx context.Context, body DeleteVMJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteVMResponse, error)
 
-	// GetVMWithBodyWithResponse request with any body
-	GetVMWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GetVMResponse, error)
-
-	GetVMWithResponse(ctx context.Context, body GetVMJSONRequestBody, reqEditors ...RequestEditorFn) (*GetVMResponse, error)
+	// GetVMWithResponse request
+	GetVMWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVMResponse, error)
 
 	// CreateVMWithBodyWithResponse request with any body
 	CreateVMWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateVMResponse, error)
@@ -490,6 +506,29 @@ func (r ListHealthResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListHealthResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetClusterResourcesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ClusterResource
+	JSON500      *Error
+}
+
+// Status returns HTTPResponse.Status
+func (r GetClusterResourcesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetClusterResourcesResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -601,6 +640,15 @@ func (c *ClientWithResponses) ListHealthWithResponse(ctx context.Context, reqEdi
 	return ParseListHealthResponse(rsp)
 }
 
+// GetClusterResourcesWithResponse request returning *GetClusterResourcesResponse
+func (c *ClientWithResponses) GetClusterResourcesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetClusterResourcesResponse, error) {
+	rsp, err := c.GetClusterResources(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetClusterResourcesResponse(rsp)
+}
+
 // DeleteVMWithBodyWithResponse request with arbitrary body returning *DeleteVMResponse
 func (c *ClientWithResponses) DeleteVMWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteVMResponse, error) {
 	rsp, err := c.DeleteVMWithBody(ctx, contentType, body, reqEditors...)
@@ -618,17 +666,9 @@ func (c *ClientWithResponses) DeleteVMWithResponse(ctx context.Context, body Del
 	return ParseDeleteVMResponse(rsp)
 }
 
-// GetVMWithBodyWithResponse request with arbitrary body returning *GetVMResponse
-func (c *ClientWithResponses) GetVMWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GetVMResponse, error) {
-	rsp, err := c.GetVMWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetVMResponse(rsp)
-}
-
-func (c *ClientWithResponses) GetVMWithResponse(ctx context.Context, body GetVMJSONRequestBody, reqEditors ...RequestEditorFn) (*GetVMResponse, error) {
-	rsp, err := c.GetVM(ctx, body, reqEditors...)
+// GetVMWithResponse request returning *GetVMResponse
+func (c *ClientWithResponses) GetVMWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVMResponse, error) {
+	rsp, err := c.GetVM(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -680,6 +720,39 @@ func ParseListHealthResponse(rsp *http.Response) (*ListHealthResponse, error) {
 	response := &ListHealthResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetClusterResourcesResponse parses an HTTP response from a GetClusterResourcesWithResponse call
+func ParseGetClusterResourcesResponse(rsp *http.Response) (*GetClusterResourcesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetClusterResourcesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ClusterResource
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil

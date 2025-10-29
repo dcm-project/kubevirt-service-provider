@@ -1,8 +1,8 @@
 openapi: 3.0.0
 info:
   contact: { }
-  description: KubeVirt Service Provider API
-  title: Service Provider API
+  description: KubeVirt Provider API
+  title: KubeVirt Provider API
   version: v1alpha1
   license:
     name: Apache 2.0
@@ -26,12 +26,6 @@ paths:
       summary: Get a virtual machine application
       operationId: GetVM
       description: Get a VM application
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VMRequest'
       responses:
         '200':
           description: OK
@@ -140,6 +134,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /v1/cluster:
+   get:
+     summary: Get cluster resource information
+     operationId: GetClusterResources
+     description: Get information about cluster resources
+     responses:
+       '200':
+         description: OK
+         content:
+           application/json:
+             schema:
+               $ref: '#/components/schemas/ClusterResource'
+       '500':
+         description: Internal server error
+         content:
+           application/json:
+             schema:
+               $ref: '#/components/schemas/Error'
+
+
 components:
   schemas:
     VMRequest:
@@ -184,6 +198,23 @@ components:
         namespace:
           type: string
           description: Namespace of the VM
+    ClusterResource:
+      type: object
+      x-aep-resource: true
+      properties:
+        availableCpu:
+          type: string
+          description: Total allocatable cluster CPU in cores
+          example: "16"
+        availableMemory:
+          type: string
+          description: Total allocatable cluster memory
+          example: "32298000Ki"
+        availableStorage:
+          type: string
+          description: Total allocatable local storage
+          example: "32298000Ki"
+
     Error:
       required:
         - error

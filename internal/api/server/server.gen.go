@@ -13,6 +13,18 @@ import (
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 )
 
+// ClusterResource defines model for ClusterResource.
+type ClusterResource struct {
+	// AvailableCpu Total allocatable cluster CPU
+	AvailableCpu *string `json:"availableCpu,omitempty"`
+
+	// AvailableMemory Total allocatable cluster memory
+	AvailableMemory *string `json:"availableMemory,omitempty"`
+
+	// AvailableStorage Total allocatable cluster storage
+	AvailableStorage *string `json:"availableStorage,omitempty"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Code Error code
@@ -58,9 +70,6 @@ type VMRequest struct {
 // DeleteVMJSONRequestBody defines body for DeleteVM for application/json ContentType.
 type DeleteVMJSONRequestBody = VMRequest
 
-// GetVMJSONRequestBody defines body for GetVM for application/json ContentType.
-type GetVMJSONRequestBody = VMRequest
-
 // CreateVMJSONRequestBody defines body for CreateVM for application/json ContentType.
 type CreateVMJSONRequestBody = VMRequest
 
@@ -72,6 +81,9 @@ type ServerInterface interface {
 	// Health check
 	// (GET /health)
 	ListHealth(w http.ResponseWriter, r *http.Request)
+	// Get cluster resource information
+	// (GET /v1/cluster)
+	GetClusterResources(w http.ResponseWriter, r *http.Request)
 	// Delete an application
 	// (DELETE /v1/vm)
 	DeleteVM(w http.ResponseWriter, r *http.Request)
@@ -93,6 +105,12 @@ type Unimplemented struct{}
 // Health check
 // (GET /health)
 func (_ Unimplemented) ListHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get cluster resource information
+// (GET /v1/cluster)
+func (_ Unimplemented) GetClusterResources(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -135,6 +153,21 @@ func (siw *ServerInterfaceWrapper) ListHealth(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// GetClusterResources operation middleware
+func (siw *ServerInterfaceWrapper) GetClusterResources(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetClusterResources(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -321,6 +354,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/health", wrapper.ListHealth)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/v1/cluster", wrapper.GetClusterResources)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/v1/vm", wrapper.DeleteVM)
 	})
 	r.Group(func(r chi.Router) {
@@ -349,6 +385,31 @@ type ListHealth200Response struct {
 func (response ListHealth200Response) VisitListHealthResponse(w http.ResponseWriter) error {
 	w.WriteHeader(200)
 	return nil
+}
+
+type GetClusterResourcesRequestObject struct {
+}
+
+type GetClusterResourcesResponseObject interface {
+	VisitGetClusterResourcesResponse(w http.ResponseWriter) error
+}
+
+type GetClusterResources200JSONResponse ClusterResource
+
+func (response GetClusterResources200JSONResponse) VisitGetClusterResourcesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetClusterResources500JSONResponse Error
+
+func (response GetClusterResources500JSONResponse) VisitGetClusterResourcesResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
 }
 
 type DeleteVMRequestObject struct {
@@ -387,7 +448,6 @@ func (response DeleteVM500JSONResponse) VisitDeleteVMResponse(w http.ResponseWri
 }
 
 type GetVMRequestObject struct {
-	Body *GetVMJSONRequestBody
 }
 
 type GetVMResponseObject interface {
@@ -496,6 +556,9 @@ type StrictServerInterface interface {
 	// Health check
 	// (GET /health)
 	ListHealth(ctx context.Context, request ListHealthRequestObject) (ListHealthResponseObject, error)
+	// Get cluster resource information
+	// (GET /v1/cluster)
+	GetClusterResources(ctx context.Context, request GetClusterResourcesRequestObject) (GetClusterResourcesResponseObject, error)
 	// Delete an application
 	// (DELETE /v1/vm)
 	DeleteVM(ctx context.Context, request DeleteVMRequestObject) (DeleteVMResponseObject, error)
@@ -563,6 +626,30 @@ func (sh *strictHandler) ListHealth(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetClusterResources operation middleware
+func (sh *strictHandler) GetClusterResources(w http.ResponseWriter, r *http.Request) {
+	var request GetClusterResourcesRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetClusterResources(ctx, request.(GetClusterResourcesRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetClusterResources")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetClusterResourcesResponseObject); ok {
+		if err := validResponse.VisitGetClusterResourcesResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // DeleteVM operation middleware
 func (sh *strictHandler) DeleteVM(w http.ResponseWriter, r *http.Request) {
 	var request DeleteVMRequestObject
@@ -597,13 +684,6 @@ func (sh *strictHandler) DeleteVM(w http.ResponseWriter, r *http.Request) {
 // GetVM operation middleware
 func (sh *strictHandler) GetVM(w http.ResponseWriter, r *http.Request) {
 	var request GetVMRequestObject
-
-	var body GetVMJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetVM(ctx, request.(GetVMRequestObject))

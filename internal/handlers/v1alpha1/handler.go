@@ -9,12 +9,14 @@ import (
 )
 
 type ServiceHandler struct {
-	vmService *service.VMService
+	vmService              *service.VMService
+	clusterResourceService *service.ClusterResourceService
 }
 
-func NewServiceHandler(providerService *service.VMService) *ServiceHandler {
+func NewServiceHandler(providerService *service.VMService, clusterResource *service.ClusterResourceService) *ServiceHandler {
 	return &ServiceHandler{
-		vmService: providerService,
+		vmService:              providerService,
+		clusterResourceService: clusterResource,
 	}
 }
 
@@ -54,7 +56,7 @@ func (s *ServiceHandler) ApplyVM(ctx context.Context, request server.ApplyVMRequ
 
 // DeleteVM (DELETE /v1/vm)
 func (s *ServiceHandler) DeleteVM(ctx context.Context, request server.DeleteVMRequestObject) (server.DeleteVMResponseObject, error) {
-	logger := zap.S().Named("service-provider")
+	logger := zap.S().Named("handler")
 	logger.Info("Deleting Application. ", "VM: ", request)
 	appID := request.Body.Id
 	declaredVM, err := s.vmService.DeleteVMApplication(ctx, appID)
@@ -67,4 +69,20 @@ func (s *ServiceHandler) DeleteVM(ctx context.Context, request server.DeleteVMRe
 		Id:        appID,
 		Name:      &declaredVM.RequestInfo.VMName,
 		Namespace: &declaredVM.RequestInfo.Namespace}, nil
+}
+
+func (s *ServiceHandler) GetClusterResources(ctx context.Context, request server.GetClusterResourcesRequestObject) (server.GetClusterResourcesResponseObject, error) {
+	logger := zap.S().Named("handler")
+	logger.Info("Retrieving cluster resource information")
+
+	resources, err := s.clusterResourceService.GetClusterResources(ctx)
+	if err != nil {
+		logger.Error("Failed to get cluster resource information")
+		return nil, err
+	}
+	return server.GetClusterResources200JSONResponse{
+		AvailableCpu:     &resources.AvailableCPU,
+		AvailableMemory:  &resources.AvailableMemory,
+		AvailableStorage: &resources.AvailableStorage,
+	}, nil
 }
