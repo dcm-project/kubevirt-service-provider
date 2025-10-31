@@ -18,6 +18,7 @@ import (
 	"github.com/dcm-project/service-provider-api/internal/service"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-resty/resty/v2"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
@@ -108,9 +109,60 @@ func (s *Server) Run(ctx context.Context) error {
 		_ = srv.Shutdown(ctxTimeout)
 	}()
 
-	zap.S().Named("api_server").Infof("Listening on %s...", s.listener.Addr().String())
-	if err := srv.Serve(s.listener); err != nil && !errors.Is(err, net.ErrClosed) {
+	// Start server in a goroutine
+	serverErr := make(chan error, 1)
+	go func() {
+		zap.S().Named("api_server").Infof("Listening on %s...", s.listener.Addr().String())
+		if err := srv.Serve(s.listener); err != nil && !errors.Is(err, net.ErrClosed) {
+			serverErr <- err
+		}
+	}()
+
+	// Wait a moment for the server to start listening, then register with service provider API
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		if err := s.registerWithDCMServiceProviderAPI(ctx); err != nil {
+			zap.S().Named("api_server").Errorw("Failed to register with service provider API", "error", err)
+			// Note: We log the error but don't fail the server startup
+		}
+	}()
+
+	// Wait for context cancellation or server error
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-serverErr:
 		return err
+	}
+}
+
+// registerWithDCMServiceProviderAPI registers this service with DCM service provider API
+func (s *Server) registerWithDCMServiceProviderAPI(ctx context.Context) error {
+	zap.S().Named("api_server").Info("Registering with DCM service provider API...")
+
+	payload := map[string]interface{}{
+		"apiHost":     s.cfg.Service.BaseUrl,
+		"description": "KubeVirt Virtual Machine Service Provider",
+		"endpoint":    "/v1/vm",
+		"id":          "123e4567-e89b-12d3-a456-426614174220",
+		"name":        "kubevirt-service-provider",
+		"operations":  []string{"GET", "PUT", "POST", "DELETE"},
+		"type":        "virtual_machine",
+	}
+	restyClient := resty.New()
+	result, err := restyClient.R().
+		SetBody(payload).
+		Post(fmt.Sprintf("%s%s", s.cfg.Service.RegistryUrl, s.cfg.Service.RegistryEndpoint))
+
+	if err != nil {
+		return fmt.Errorf("failed to register with DCM service provider API: %w", err)
+	}
+
+	if result.IsError() {
+		return fmt.Errorf("external service returned error status: %d, response: %s", result.StatusCode(), result.String())
+	}
+	if result.StatusCode() == http.StatusCreated {
+		zap.S().Named("api_server").Info("Successfully registered with DCM service provider API")
 	}
 
 	return nil
