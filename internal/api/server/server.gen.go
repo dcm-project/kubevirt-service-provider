@@ -69,54 +69,54 @@ type ApplyVMJSONRequestBody = VMRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// Health check
-	// (GET /health)
-	ListHealth(w http.ResponseWriter, r *http.Request)
 	// Delete an application
-	// (DELETE /v1/vm)
+	// (DELETE /api/v1/vm)
 	DeleteVM(w http.ResponseWriter, r *http.Request)
 	// Get a virtual machine application
-	// (GET /v1/vm)
+	// (GET /api/v1/vm)
 	GetVM(w http.ResponseWriter, r *http.Request)
 	// Create a VM
-	// (POST /v1/vm)
+	// (POST /api/v1/vm)
 	CreateVM(w http.ResponseWriter, r *http.Request)
 	// Update an application
-	// (PUT /v1/vm)
+	// (PUT /api/v1/vm)
 	ApplyVM(w http.ResponseWriter, r *http.Request)
+	// Health check
+	// (GET /api/v1/vm/health)
+	ListHealth(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
 
-// Health check
-// (GET /health)
-func (_ Unimplemented) ListHealth(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // Delete an application
-// (DELETE /v1/vm)
+// (DELETE /api/v1/vm)
 func (_ Unimplemented) DeleteVM(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get a virtual machine application
-// (GET /v1/vm)
+// (GET /api/v1/vm)
 func (_ Unimplemented) GetVM(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Create a VM
-// (POST /v1/vm)
+// (POST /api/v1/vm)
 func (_ Unimplemented) CreateVM(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Update an application
-// (PUT /v1/vm)
+// (PUT /api/v1/vm)
 func (_ Unimplemented) ApplyVM(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Health check
+// (GET /api/v1/vm/health)
+func (_ Unimplemented) ListHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -128,21 +128,6 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
-
-// ListHealth operation middleware
-func (siw *ServerInterfaceWrapper) ListHealth(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListHealth(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r.WithContext(ctx))
-}
 
 // DeleteVM operation middleware
 func (siw *ServerInterfaceWrapper) DeleteVM(w http.ResponseWriter, r *http.Request) {
@@ -195,6 +180,21 @@ func (siw *ServerInterfaceWrapper) ApplyVM(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ApplyVM(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// ListHealth operation middleware
+func (siw *ServerInterfaceWrapper) ListHealth(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListHealth(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -318,37 +318,22 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/health", wrapper.ListHealth)
+		r.Delete(options.BaseURL+"/api/v1/vm", wrapper.DeleteVM)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/v1/vm", wrapper.DeleteVM)
+		r.Get(options.BaseURL+"/api/v1/vm", wrapper.GetVM)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/v1/vm", wrapper.GetVM)
+		r.Post(options.BaseURL+"/api/v1/vm", wrapper.CreateVM)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/v1/vm", wrapper.CreateVM)
+		r.Put(options.BaseURL+"/api/v1/vm", wrapper.ApplyVM)
 	})
 	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/v1/vm", wrapper.ApplyVM)
+		r.Get(options.BaseURL+"/api/v1/vm/health", wrapper.ListHealth)
 	})
 
 	return r
-}
-
-type ListHealthRequestObject struct {
-}
-
-type ListHealthResponseObject interface {
-	VisitListHealthResponse(w http.ResponseWriter) error
-}
-
-type ListHealth200Response struct {
-}
-
-func (response ListHealth200Response) VisitListHealthResponse(w http.ResponseWriter) error {
-	w.WriteHeader(200)
-	return nil
 }
 
 type DeleteVMRequestObject struct {
@@ -491,23 +476,38 @@ func (response ApplyVM500JSONResponse) VisitApplyVMResponse(w http.ResponseWrite
 	return json.NewEncoder(w).Encode(response)
 }
 
+type ListHealthRequestObject struct {
+}
+
+type ListHealthResponseObject interface {
+	VisitListHealthResponse(w http.ResponseWriter) error
+}
+
+type ListHealth200Response struct {
+}
+
+func (response ListHealth200Response) VisitListHealthResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// Health check
-	// (GET /health)
-	ListHealth(ctx context.Context, request ListHealthRequestObject) (ListHealthResponseObject, error)
 	// Delete an application
-	// (DELETE /v1/vm)
+	// (DELETE /api/v1/vm)
 	DeleteVM(ctx context.Context, request DeleteVMRequestObject) (DeleteVMResponseObject, error)
 	// Get a virtual machine application
-	// (GET /v1/vm)
+	// (GET /api/v1/vm)
 	GetVM(ctx context.Context, request GetVMRequestObject) (GetVMResponseObject, error)
 	// Create a VM
-	// (POST /v1/vm)
+	// (POST /api/v1/vm)
 	CreateVM(ctx context.Context, request CreateVMRequestObject) (CreateVMResponseObject, error)
 	// Update an application
-	// (PUT /v1/vm)
+	// (PUT /api/v1/vm)
 	ApplyVM(ctx context.Context, request ApplyVMRequestObject) (ApplyVMResponseObject, error)
+	// Health check
+	// (GET /api/v1/vm/health)
+	ListHealth(ctx context.Context, request ListHealthRequestObject) (ListHealthResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -537,30 +537,6 @@ type strictHandler struct {
 	ssi         StrictServerInterface
 	middlewares []StrictMiddlewareFunc
 	options     StrictHTTPServerOptions
-}
-
-// ListHealth operation middleware
-func (sh *strictHandler) ListHealth(w http.ResponseWriter, r *http.Request) {
-	var request ListHealthRequestObject
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListHealth(ctx, request.(ListHealthRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListHealth")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListHealthResponseObject); ok {
-		if err := validResponse.VisitListHealthResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
 }
 
 // DeleteVM operation middleware
@@ -680,6 +656,30 @@ func (sh *strictHandler) ApplyVM(w http.ResponseWriter, r *http.Request) {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(ApplyVMResponseObject); ok {
 		if err := validResponse.VisitApplyVMResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// ListHealth operation middleware
+func (sh *strictHandler) ListHealth(w http.ResponseWriter, r *http.Request) {
+	var request ListHealthRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.ListHealth(ctx, request.(ListHealthRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "ListHealth")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(ListHealthResponseObject); ok {
+		if err := validResponse.VisitListHealthResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

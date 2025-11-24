@@ -89,9 +89,6 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
-	// ListHealth request
-	ListHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// DeleteVMWithBody request with any body
 	DeleteVMWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -111,18 +108,9 @@ type ClientInterface interface {
 	ApplyVMWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	ApplyVM(ctx context.Context, body ApplyVMJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-}
 
-func (c *Client) ListHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListHealthRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
+	// ListHealth request
+	ListHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) DeleteVMWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -221,31 +209,16 @@ func (c *Client) ApplyVM(ctx context.Context, body ApplyVMJSONRequestBody, reqEd
 	return c.Client.Do(req)
 }
 
-// NewListHealthRequest generates requests for ListHealth
-func NewListHealthRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
+func (c *Client) ListHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListHealthRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
-
-	operationPath := fmt.Sprintf("/health")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
 		return nil, err
 	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
+	return c.Client.Do(req)
 }
 
 // NewDeleteVMRequest calls the generic DeleteVM builder with application/json body
@@ -268,7 +241,7 @@ func NewDeleteVMRequestWithBody(server string, contentType string, body io.Reade
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/v1/vm")
+	operationPath := fmt.Sprintf("/api/v1/vm")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -308,7 +281,7 @@ func NewGetVMRequestWithBody(server string, contentType string, body io.Reader) 
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/v1/vm")
+	operationPath := fmt.Sprintf("/api/v1/vm")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -348,7 +321,7 @@ func NewCreateVMRequestWithBody(server string, contentType string, body io.Reade
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/v1/vm")
+	operationPath := fmt.Sprintf("/api/v1/vm")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -388,7 +361,7 @@ func NewApplyVMRequestWithBody(server string, contentType string, body io.Reader
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/v1/vm")
+	operationPath := fmt.Sprintf("/api/v1/vm")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -404,6 +377,33 @@ func NewApplyVMRequestWithBody(server string, contentType string, body io.Reader
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListHealthRequest generates requests for ListHealth
+func NewListHealthRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/vm/health")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -451,9 +451,6 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
-	// ListHealthWithResponse request
-	ListHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListHealthResponse, error)
-
 	// DeleteVMWithBodyWithResponse request with any body
 	DeleteVMWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteVMResponse, error)
 
@@ -473,27 +470,9 @@ type ClientWithResponsesInterface interface {
 	ApplyVMWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplyVMResponse, error)
 
 	ApplyVMWithResponse(ctx context.Context, body ApplyVMJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplyVMResponse, error)
-}
 
-type ListHealthResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-}
-
-// Status returns HTTPResponse.Status
-func (r ListHealthResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListHealthResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
+	// ListHealthWithResponse request
+	ListHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListHealthResponse, error)
 }
 
 type DeleteVMResponse struct {
@@ -592,13 +571,25 @@ func (r ApplyVMResponse) StatusCode() int {
 	return 0
 }
 
-// ListHealthWithResponse request returning *ListHealthResponse
-func (c *ClientWithResponses) ListHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListHealthResponse, error) {
-	rsp, err := c.ListHealth(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
+type ListHealthResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r ListHealthResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
 	}
-	return ParseListHealthResponse(rsp)
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListHealthResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 // DeleteVMWithBodyWithResponse request with arbitrary body returning *DeleteVMResponse
@@ -669,20 +660,13 @@ func (c *ClientWithResponses) ApplyVMWithResponse(ctx context.Context, body Appl
 	return ParseApplyVMResponse(rsp)
 }
 
-// ParseListHealthResponse parses an HTTP response from a ListHealthWithResponse call
-func ParseListHealthResponse(rsp *http.Response) (*ListHealthResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
+// ListHealthWithResponse request returning *ListHealthResponse
+func (c *ClientWithResponses) ListHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListHealthResponse, error) {
+	rsp, err := c.ListHealth(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-
-	response := &ListHealthResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	return response, nil
+	return ParseListHealthResponse(rsp)
 }
 
 // ParseDeleteVMResponse parses an HTTP response from a DeleteVMWithResponse call
@@ -840,6 +824,22 @@ func ParseApplyVMResponse(rsp *http.Response) (*ApplyVMResponse, error) {
 		}
 		response.JSON500 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseListHealthResponse parses an HTTP response from a ListHealthWithResponse call
+func ParseListHealthResponse(rsp *http.Response) (*ListHealthResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListHealthResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
 	}
 
 	return response, nil

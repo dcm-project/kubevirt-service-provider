@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/dcm-project/service-provider-api/internal/api/server"
-	"github.com/dcm-project/service-provider-api/internal/service/model"
+	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
+	"github.com/dcm-project/kubevirt-service-provider/internal/service/model"
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"

@@ -3,8 +3,8 @@ package v1alpha1
 import (
 	"context"
 
-	"github.com/dcm-project/service-provider-api/internal/api/server"
-	"github.com/dcm-project/service-provider-api/internal/service"
+	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
+	"github.com/dcm-project/kubevirt-service-provider/internal/service"
 	"go.uber.org/zap"
 )
 
