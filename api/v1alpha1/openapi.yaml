@@ -21,7 +21,16 @@ paths:
         '200':
           description: OK
 
-  /v1/vm:
+  /api/v1/vm/health:
+    get:
+      summary: Health check
+      operationId: ListHealth
+      description: Health check for VM service type
+      responses:
+        '200':
+          description: OK
+
+  /api/v1/vm:
     get:
       summary: Get a virtual machine application
       operationId: GetVM

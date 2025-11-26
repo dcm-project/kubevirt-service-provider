@@ -5,7 +5,7 @@ GOBIN := $(shell go env GOPATH)/bin
 
 # Build the application
 build:
-	go build -o bin/service-provider-api ./cmd/service-provider-api
+	go build -o bin/kubevirt-service-provider ./cmd/kubevirt-service-provider
 
 # Check AEP compliance
 aep:
@@ -40,7 +40,7 @@ check: fmt vet test
 
 # Build and run
 dev: build
-	./bin/service-provider-api
+	./bin/kubevirt-service-provider
 
 ##################### "make generate" support start ##########################
 MOQ := $(GOBIN)/moq

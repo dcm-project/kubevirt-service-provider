@@ -13,14 +13,14 @@ import (
 	"strings"
 	"time"
 
-	api "github.com/dcm-project/service-provider-api/api/v1alpha1"
-	"github.com/dcm-project/service-provider-api/internal/api/server"
-	"github.com/dcm-project/service-provider-api/internal/config"
-	handlers "github.com/dcm-project/service-provider-api/internal/handlers/v1alpha1"
-	"github.com/dcm-project/service-provider-api/internal/service"
+	api "github.com/dcm-project/kubevirt-service-provider/api/v1alpha1"
+	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
+	"github.com/dcm-project/kubevirt-service-provider/internal/config"
+	handlers "github.com/dcm-project/kubevirt-service-provider/internal/handlers/v1alpha1"
+	"github.com/dcm-project/kubevirt-service-provider/internal/service"
+	dcm "github.com/dcm-project/service-provider-api/pkg/registration/client"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/go-resty/resty/v2"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
@@ -129,7 +129,7 @@ func (s *Server) Run(ctx context.Context) error {
 		// Small delay to ensure server is fully ready after srv.Serve() is called
 		time.Sleep(100 * time.Millisecond)
 		if err := s.registerWithDCMServiceProviderAPI(ctx); err != nil {
-			zap.S().Named("api_server").Errorw("Failed to register with service provider API", "error", err)
+			zap.S().Named("api_server").Errorw("Failed to register with DCM ", "error", err)
 			// Note: We log the error but don't fail the server startup
 		}
 	}()
@@ -185,34 +185,24 @@ func (s *Server) registerWithDCMServiceProviderAPI(ctx context.Context) error {
 		return fmt.Errorf("apiHost cannot be empty: listener address unavailable and BaseUrl not configured")
 	}
 
-	payload := map[string]interface{}{
-		"apiHost":     apiHost,
-		"description": "KubeVirt Virtual Machine Service Provider",
-		"endpoint":    "/v1/vm",
-		"id":          "123e4567-e89b-12d3-a456-426614174222",
-		"name":        "kubevirt-service-provider",
-		"operations":  []string{"GET", "PUT", "POST", "DELETE"},
-		"type":        "virtual_machine",
+	registrar := dcm.New(dcm.Config{BaseURL: s.cfg.Service.RegistryUrl})
+
+	request := &dcm.RegistrationRequest{
+		ServiceID: "123e4567-e89b-12d3-a456-426614174222",
+		Endpoint:  fmt.Sprintf("%s/api/v1/vm", apiHost),
+		Metadata: dcm.Metadata{
+			Zone:   "us-east-1b",
+			Region: "us-east-1",
+		},
+		Operations: []string{"CREATE", "DELETE", "READ"},
 	}
 
-	restyClient := resty.New().
-		SetHeader("Content-Type", "application/json")
-
-	result, err := restyClient.R().
-		SetContext(ctx).
-		SetBody(payload).
-		Post(fmt.Sprintf("%s%s", s.cfg.Service.RegistryUrl, s.cfg.Service.RegistryEndpoint))
+	result, err := registrar.Register(ctx, "virtual_machine", request)
 
 	if err != nil {
 		return fmt.Errorf("failed to register with DCM service provider API: %w", err)
 	}
-
-	if result.IsError() {
-		return fmt.Errorf("external service returned error status: %d, response: %s", result.StatusCode(), result.String())
-	}
-	if result.StatusCode() == http.StatusCreated {
-		zap.S().Named("api_server").Info("Successfully registered with DCM service provider API")
-	}
+	zap.S().Named("api_server").Info("Successfully registered with DCM ", "Service ID ", result.ServiceID)
 
 	return nil
 }

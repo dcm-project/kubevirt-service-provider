@@ -7,8 +7,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	apiserver "github.com/dcm-project/service-provider-api/internal/api_server"
-	"github.com/dcm-project/service-provider-api/internal/config"
+	apiserver "github.com/dcm-project/kubevirt-service-provider/internal/api_server"
+	"github.com/dcm-project/kubevirt-service-provider/internal/config"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
