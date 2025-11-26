@@ -1,155 +1,16 @@
 openapi: 3.0.0
 info:
-  contact: { }
-  description: KubeVirt Service Provider API
-  title: KubeVirt Service Provider API
-  version: v1alpha1
-  license:
-    name: Apache 2.0
-    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  title: DCM Virtual Machine Specification
+  description: |
+    Provider-agnostic virtual machine specification based on OVF 2.1 (DMTF DSP0243) 
+    and CIM System Virtualization Model.
+    
+    This schema represents compute, memory, storage, and network requirements that 
+    can be fulfilled by various providers (KubeVirt, VMware vSphere, OpenStack, 
+    AWS, Azure, Google Cloud, etc.).
+  version: 1.0.0
 
-servers:
-  - url: /
-
-paths:
-  /health:
-    get:
-      summary: Health check
-      operationId: ListHealth
-      description: Health check for KubeVirt Service Provider API
-      responses:
-        '200':
-          description: OK
-
-  /api/v1/vm/health:
-    get:
-      summary: Health check
-      operationId: GetVMHealth
-      description: Health check for VM service type
-      responses:
-        '200':
-          description: OK
-
-  /api/v1/vm:
-    get:
-      summary: Get a virtual machine application
-      operationId: GetVM
-      description: Get a VM application
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VM'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-    post:
-      summary: Create a VM
-      operationId: CreateVM
-      description: Create an vm application
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VMSpec'
-      responses:
-        '201':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VM'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-
-  /api/v1/vm/{id}:
-    put:
-      summary: Update an application
-      operationId: ApplyVM
-      description: Update a KubeVirt VM application
-      parameters:
-        - name: id
-          schema:
-            type: string
-          required: true
-          in: path
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VMSpec'
-      responses:
-        '201':
-          description: Updated Content
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VM'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-    delete:
-      summary: Delete an application
-      operationId: DeleteVM
-      description: Delete a KubeVirt application
-      parameters:
-        - name: id
-          schema:
-            type: string
-          required: true
-          in: path
-      responses:
-        '204':
-          description: No Content
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VM'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+paths: {}
 
 components:
   schemas:
@@ -307,6 +168,7 @@ components:
                     Maximum memory in GB (optional).
                   minimum: 0
                   example: 32
+
         # ======================================================================
         # Storage Configuration
         # Based on: OVF DiskSection, CIM CIM_StorageExtent
@@ -379,6 +241,7 @@ components:
                     minimum: 1
                     maximum: 16
                     example: 1
+
         # ======================================================================
         # Network Configuration
         # Based on: OVF NetworkSection, CIM CIM_NetworkAdapter
@@ -454,6 +317,7 @@ components:
                           type: string
                           pattern: "^([0-9]{1,3}\\.){3}[0-9]{1,3}$"
                         example: ["8.8.8.8", "8.8.4.4"]
+
         # ======================================================================
         # Operating System & Firmware
         # Based on: OVF OperatingSystemSection
@@ -496,7 +360,7 @@ components:
             architecture:
               type: string
               description: CPU architecture
-              enum: ["x86_64", "aarch64", "ppc64le", "s390x", "amd64"]
+              enum: ["x86_64", "aarch64", "ppc64le", "s390x"]
               default: "x86_64"
 
             firmware:
@@ -507,6 +371,7 @@ components:
                 - uefi: UEFI firmware (required for modern OS, Secure Boot)
               enum: ["bios", "uefi", "uefi-secure-boot"]
               default: "bios"
+
         # ======================================================================
         # Initialization & Configuration
         # Based on: cloud-init standard (de facto industry standard)
@@ -561,6 +426,7 @@ components:
                 description: SSH public key
               example:
                 - "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ..."
+
         # ======================================================================
         # Metadata & Extensibility
         # Based on: OVF ProductSection, TOSCA metadata
@@ -578,6 +444,7 @@ components:
             application: "web-frontend"
             owner: "platform-team"
             costCenter: "engineering"
+
         annotations:
           type: object
           description: |
@@ -588,6 +455,7 @@ components:
           example:
             description: "Production web server for customer portal"
             documentation: "https://wiki.example.com/vm-templates"
+
         # ======================================================================
         # Provider Hints
         # ======================================================================
@@ -623,31 +491,3 @@ components:
               instanceType: "t3.xlarge"
               ebsOptimized: true
               placementGroup: "web-tier"
-
-    VM:
-      type: object
-      x-aep-resource: true
-      properties:
-        id:
-          type: string
-          description: ID of the VM
-          example: "123e4567-e89b-12d3-a456-426614174000"
-        name:
-          type: string
-          description: Name of the VM
-          example: "webserver"
-        namespace:
-          type: string
-          description: Namespace of the VM
-    Error:
-      required:
-        - error
-      type: object
-      properties:
-        error:
-          type: string
-          description: Error message
-        code:
-          type: integer
-          description: Error code
-          example: 400
