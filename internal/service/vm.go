@@ -6,7 +6,9 @@ import (
 	"log"
 
 	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
-	"github.com/dcm-project/kubevirt-service-provider/internal/service/model"
+	"github.com/dcm-project/kubevirt-service-provider/internal/service/mapper"
+	"github.com/dcm-project/kubevirt-service-provider/internal/store"
+	"github.com/dcm-project/kubevirt-service-provider/internal/store/model"
 	"github.com/google/uuid"
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
@@ -18,19 +20,26 @@ import (
 
 type VMService struct {
 	client kubecli.KubevirtClient
+	store  store.Store
 }
 
-func NewVMService() *VMService {
+func NewVMService(store store.Store) *VMService {
 	virtClient, err := kubecli.GetKubevirtClientFromClientConfig(
 		kubecli.DefaultClientConfig(&pflag.FlagSet{}),
 	)
 	if err != nil {
 		log.Fatalf("cannot obtain KubeVirt client: %v\n", err)
 	}
-	return &VMService{client: virtClient}
+	return &VMService{client: virtClient, store: store}
 }
 
-func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSONRequestBody) (model.DeclaredVM, error) {
+const (
+	StatusCreated    = "CREATED"
+	StatusInProgress = "IN_PROGRESS"
+	StatusReady      = "READY"
+)
+
+func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSONRequestBody) (mapper.DeclaredVM, error) {
 	logger := zap.S().Named("vm_service:create_vm")
 
 	metadata := *userRequest.Metadata
@@ -38,18 +47,18 @@ func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSO
 	if !ok {
 		logger.Warn("Application field not found in metadata")
 	}
-	id := uuid.New().String()
+	id := uuid.New()
 
 	logger.Info("Starting VM creation for: ", appName)
 
 	namespace := "us-east-1"
 
-	request := model.Request{
+	request := mapper.Request{
 		OsImage:      v.getOSImage(userRequest.GuestOS.Type),
 		Ram:          userRequest.Compute.Memory.SizeGB,
 		Cpu:          userRequest.Compute.Vcpu.Count,
 		Architecture: string(*userRequest.GuestOS.Architecture),
-		RequestId:    id,
+		RequestId:    id.String(),
 		VMName:       appName,
 		HostName:     *userRequest.Initialization.Hostname,
 	}
@@ -166,25 +175,47 @@ func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSO
 	}
 
 	// Create the VirtualMachine in the cluster
-	_, err := v.client.VirtualMachine(namespace).Create(ctx, virtualMachine, metav1.CreateOptions{})
+	createdVM, err := v.client.VirtualMachine(namespace).Create(ctx, virtualMachine, metav1.CreateOptions{})
 	if err != nil {
-		return model.DeclaredVM{}, fmt.Errorf("failed to create VirtualMachine: %w", err)
+		return mapper.DeclaredVM{}, fmt.Errorf("failed to create VirtualMachine: %w", err)
+	}
+
+	dbApp := model.ProviderApplication{
+		ID:           id,
+		OsImage:      request.OsImage,
+		Ram:          request.Ram,
+		Cpu:          request.Cpu,
+		Namespace:    request.Namespace,
+		VMName:       request.VMName,
+		Architecture: request.Architecture,
+		HostName:     request.HostName,
+	}
+
+	if createdVM.Status.Created {
+		dbApp.Status = StatusCreated
+	} else {
+		dbApp.Status = StatusInProgress
+	}
+
+	_, err = v.store.Application().Create(ctx, dbApp)
+	if err != nil {
+		return mapper.DeclaredVM{}, fmt.Errorf("failed to create application: %w", err)
 	}
 
 	logger.Info("Successfully created VM", request.RequestId)
-	return model.DeclaredVM{ID: request.RequestId, RequestInfo: request}, nil
+	return mapper.DeclaredVM{ID: request.RequestId, RequestInfo: request}, nil
 
 }
 
-func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) (model.DeclaredVM, error) {
+func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) (mapper.DeclaredVM, error) {
 	logger := zap.S().Named("service-provider:delete_app")
 	logger.Info("Deleting VM application", "ID ", appID)
 
-	return model.DeclaredVM{}, nil
+	return mapper.DeclaredVM{}, nil
 }
 
 // generateCloudInitUserData generates cloud-init user data for the VM
-func (v *VMService) generateCloudInitUserData(hostname string, vm *model.Request) string {
+func (v *VMService) generateCloudInitUserData(hostname string, vm *mapper.Request) string {
 	return fmt.Sprintf(`#cloud-config
 user: %s
 password: auto-generated-pass

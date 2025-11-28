@@ -54,7 +54,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-
     post:
       summary: Create a VM
       operationId: CreateVM

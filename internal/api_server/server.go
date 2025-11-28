@@ -18,6 +18,7 @@ import (
 	"github.com/dcm-project/kubevirt-service-provider/internal/config"
 	handlers "github.com/dcm-project/kubevirt-service-provider/internal/handlers/v1alpha1"
 	"github.com/dcm-project/kubevirt-service-provider/internal/service"
+	"github.com/dcm-project/kubevirt-service-provider/internal/store"
 	dcm "github.com/dcm-project/service-provider-api/pkg/registration/client"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -34,17 +35,19 @@ const (
 
 type Server struct {
 	cfg      *config.Config
+	store    store.Store
 	listener net.Listener
 }
 
 // New returns a new instance of a migration-planner server.
 func New(
 	cfg *config.Config,
-
+	store store.Store,
 	listener net.Listener,
 ) *Server {
 	return &Server{
 		cfg:      cfg,
+		store:    store,
 		listener: listener,
 	}
 }
@@ -90,7 +93,7 @@ func (s *Server) Run(ctx context.Context) error {
 	})
 
 	h := handlers.NewServiceHandler(
-		service.NewVMService(),
+		service.NewVMService(s.store),
 	)
 
 	// Apply OpenAPI validation middleware to API routes only

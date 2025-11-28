@@ -1,4 +1,4 @@
-package model
+package mapper
 
 type Request struct {
 	OsImage      string
