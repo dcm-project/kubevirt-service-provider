@@ -10,7 +10,70 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/oapi-codegen/runtime"
 	strictnethttp "github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
+)
+
+// Defines values for VMSpecComputeVcpuThreads.
+const (
+	N1 VMSpecComputeVcpuThreads = 1
+	N2 VMSpecComputeVcpuThreads = 2
+)
+
+// Defines values for VMSpecGuestOSArchitecture.
+const (
+	Aarch64 VMSpecGuestOSArchitecture = "aarch64"
+	Amd64   VMSpecGuestOSArchitecture = "amd64"
+	Ppc64le VMSpecGuestOSArchitecture = "ppc64le"
+	S390x   VMSpecGuestOSArchitecture = "s390x"
+	X8664   VMSpecGuestOSArchitecture = "x86_64"
+)
+
+// Defines values for VMSpecGuestOSFamily.
+const (
+	Bsd     VMSpecGuestOSFamily = "bsd"
+	Linux   VMSpecGuestOSFamily = "linux"
+	Other   VMSpecGuestOSFamily = "other"
+	Windows VMSpecGuestOSFamily = "windows"
+)
+
+// Defines values for VMSpecGuestOSFirmware.
+const (
+	Bios           VMSpecGuestOSFirmware = "bios"
+	Uefi           VMSpecGuestOSFirmware = "uefi"
+	UefiSecureBoot VMSpecGuestOSFirmware = "uefi-secure-boot"
+)
+
+// Defines values for VMSpecNetworkInterfacesIpamMode.
+const (
+	Dhcp   VMSpecNetworkInterfacesIpamMode = "dhcp"
+	None   VMSpecNetworkInterfacesIpamMode = "none"
+	Static VMSpecNetworkInterfacesIpamMode = "static"
+)
+
+// Defines values for VMSpecNetworkInterfacesModel.
+const (
+	VMSpecNetworkInterfacesModelE1000   VMSpecNetworkInterfacesModel = "e1000"
+	VMSpecNetworkInterfacesModelE1000e  VMSpecNetworkInterfacesModel = "e1000e"
+	VMSpecNetworkInterfacesModelRtl8139 VMSpecNetworkInterfacesModel = "rtl8139"
+	VMSpecNetworkInterfacesModelVirtio  VMSpecNetworkInterfacesModel = "virtio"
+	VMSpecNetworkInterfacesModelVmxnet3 VMSpecNetworkInterfacesModel = "vmxnet3"
+)
+
+// Defines values for VMSpecStorageDisksBus.
+const (
+	VMSpecStorageDisksBusIde    VMSpecStorageDisksBus = "ide"
+	VMSpecStorageDisksBusNvme   VMSpecStorageDisksBus = "nvme"
+	VMSpecStorageDisksBusSata   VMSpecStorageDisksBus = "sata"
+	VMSpecStorageDisksBusScsi   VMSpecStorageDisksBus = "scsi"
+	VMSpecStorageDisksBusVirtio VMSpecStorageDisksBus = "virtio"
+)
+
+// Defines values for VMSpecStorageDisksFormat.
+const (
+	Thick      VMSpecStorageDisksFormat = "thick"
+	ThickEager VMSpecStorageDisksFormat = "thick-eager"
+	Thin       VMSpecStorageDisksFormat = "thin"
 )
 
 // Error defines model for Error.
@@ -34,67 +97,304 @@ type VM struct {
 	Namespace *string `json:"namespace,omitempty"`
 }
 
-// VMRequest defines model for VMRequest.
-type VMRequest struct {
-	// Cpu CPU for the VM
-	Cpu *int `json:"cpu,omitempty"`
+// VMSpec Provider-agnostic virtual machine specification.
+//
+// This schema is based on industry standards (OVF, CIM) and represents
+// compute, memory, storage, and network requirements that can be fulfilled
+// by various providers (KubeVirt, VMware vSphere, OpenStack, AWS, Azure,
+// Google Cloud, etc.).
+//
+// Providers translate this abstract specification to their native format.
+//
+// Note: This schema does not define required fields. Instead, each
+// CatalogItem that references this schema can define its own validation
+// rules, allowing different catalog items to have different requirements.
+type VMSpec struct {
+	// Annotations Human-readable annotations (non-functional).
+	// Similar to Kubernetes annotations.
+	Annotations *map[string]string `json:"annotations,omitempty"`
 
-	// Id ID of the VM
-	Id *string `json:"id,omitempty"`
+	// Compute Compute resource requirements.
+	// Aligns with OVF VirtualHardwareSection for CPU configuration.
+	Compute *struct {
+		// Memory Memory configuration (RAM)
+		Memory *struct {
+			// Limit Maximum memory in GB (optional).
+			Limit *int `json:"limit,omitempty"`
 
-	// Name Name of the VM
-	Name *string `json:"name,omitempty"`
+			// Reservation Minimum guaranteed memory in GB (optional).
+			Reservation *int `json:"reservation,omitempty"`
 
-	// Namespace Namespace of the VM
-	Namespace *string `json:"namespace,omitempty"`
+			// Shares Memory shares for resource scheduling (optional).
+			// Higher values = higher priority.
+			Shares *int `json:"shares,omitempty"`
 
-	// OsImage Base image of the OS
-	OsImage *string `json:"osImage,omitempty"`
+			// SizeGB Memory size in gigabytes.
+			// Maps to: guest.memory in all providers.
+			SizeGB int `json:"sizeGB"`
+		} `json:"memory,omitempty"`
 
-	// Ram Ram for the CPU
-	Ram *int `json:"ram,omitempty"`
+		// Vcpu Virtual CPU configuration
+		Vcpu *struct {
+			// CoresPerSocket Cores per socket (optional).
+			// Used for specific CPU topology requirements.
+			CoresPerSocket *int `json:"coresPerSocket,omitempty"`
+
+			// Count Number of virtual CPUs.
+			// Maps to: vCPU count in all providers.
+			Count int `json:"count"`
+
+			// Limit Maximum CPU in MHz (optional).
+			// Based on VMware CPU limit.
+			Limit *int `json:"limit,omitempty"`
+
+			// Reservation Minimum guaranteed CPU in MHz (optional).
+			// Based on VMware CPU reservation.
+			Reservation *int `json:"reservation,omitempty"`
+
+			// Shares CPU shares for resource scheduling (optional).
+			// Higher values = higher priority.
+			// Based on VMware/OpenStack CPU shares concept.
+			Shares *int `json:"shares,omitempty"`
+
+			// Sockets Number of CPU sockets (optional).
+			// Affects NUMA topology and software licensing.
+			// Default: derive from vCPU count.
+			Sockets *int `json:"sockets,omitempty"`
+
+			// Threads Threads per core (optional).
+			// 1 = hyperthreading disabled, 2 = enabled.
+			Threads *VMSpecComputeVcpuThreads `json:"threads,omitempty"`
+		} `json:"vcpu,omitempty"`
+	} `json:"compute,omitempty"`
+
+	// GuestOS Guest operating system configuration.
+	// Based on OVF OperatingSystemSection.
+	GuestOS *struct {
+		// Architecture CPU architecture
+		Architecture *VMSpecGuestOSArchitecture `json:"architecture,omitempty"`
+
+		// Family OS family for provider hints (optional).
+		// Helps providers select appropriate defaults.
+		Family *VMSpecGuestOSFamily `json:"family,omitempty"`
+
+		// Firmware Firmware type.
+		// - bios: Traditional BIOS (broad compatibility)
+		// - uefi: UEFI firmware (required for modern OS, Secure Boot)
+		Firmware *VMSpecGuestOSFirmware `json:"firmware,omitempty"`
+
+		// Type Operating system identifier (provider-specific).
+		//
+		// Naming convention: <family>-<version>[-<variant>]
+		// Examples:
+		// - Linux: rhel-9, ubuntu-22.04, fedora-39, centos-stream-9
+		// - Windows: windows-server-2022, windows-11, windows-10
+		// - BSD: freebsd-14
+		//
+		// Providers map this to their image catalog:
+		// - KubeVirt: Container image or DataVolume
+		// - VMware: VM template or content library item
+		// - OpenStack: Glance image
+		// - AWS: AMI ID
+		// - Azure: Image reference
+		Type string `json:"type"`
+	} `json:"guestOS,omitempty"`
+
+	// Initialization VM initialization configuration.
+	// Uses cloud-init, the industry-standard for VM initialization
+	// (supported by all major Linux distros and cloud providers).
+	Initialization *struct {
+		// CloudInit Cloud-init configuration
+		CloudInit *struct {
+			// NetworkConfig Cloud-init network configuration (optional).
+			// Uses cloud-init network config v2 format.
+			NetworkConfig *string `json:"networkConfig,omitempty"`
+
+			// UserData Cloud-init user-data (YAML format).
+			// Standard cloud-init configuration for user setup,
+			// package installation, and custom scripts.
+			UserData *string `json:"userData,omitempty"`
+		} `json:"cloudInit,omitempty"`
+
+		// Hostname VM hostname
+		Hostname *string `json:"hostname,omitempty"`
+
+		// SshKeys SSH public keys for initial access
+		SshKeys *[]string `json:"sshKeys,omitempty"`
+	} `json:"initialization,omitempty"`
+
+	// Metadata Custom metadata for extensibility.
+	// Allows arbitrary key-value pairs for provider-specific
+	// configurations or future extensions without schema changes.
+	Metadata *map[string]string `json:"metadata,omitempty"`
+
+	// Network Network configuration.
+	// Based on OVF NetworkSection for network interface specifications.
+	Network *struct {
+		// Interfaces Virtual network interface specifications
+		Interfaces *[]struct {
+			// Ipam IP address management configuration
+			Ipam *struct {
+				// Dns DNS servers (for static IP)
+				Dns *[]string `json:"dns,omitempty"`
+
+				// Gateway Default gateway (for static IP)
+				Gateway *string `json:"gateway,omitempty"`
+
+				// Mode IP address allocation mode
+				Mode *VMSpecNetworkInterfacesIpamMode `json:"mode,omitempty"`
+
+				// StaticIPv4 Static IPv4 address (CIDR notation)
+				StaticIPv4 *string `json:"staticIPv4,omitempty"`
+			} `json:"ipam,omitempty"`
+
+			// Model Network adapter model (optional).
+			// Provider selects optimal default if not specified.
+			// - virtio: Paravirtualized (best performance)
+			// - e1000/e1000e: Intel emulation (broad compatibility)
+			// - vmxnet3: VMware paravirtualized
+			Model *VMSpecNetworkInterfacesModel `json:"model,omitempty"`
+
+			// Name Interface name/identifier
+			Name string `json:"name"`
+
+			// Network Network name/identifier (provider-specific).
+			// Examples: "default", "dmz", "internal", "external"
+			Network *string `json:"network,omitempty"`
+		} `json:"interfaces,omitempty"`
+	} `json:"network,omitempty"`
+
+	// ProviderHints Optional provider-specific configuration hints.
+	//
+	// Allows providers to optimize resource provisioning while keeping
+	// the core schema provider-agnostic. Each provider can define its
+	// own hints structure.
+	//
+	// Common use cases:
+	// - VMware: Hardware version, nested virtualization, advanced settings
+	// - KubeVirt: Instancetype preferences, dedicated CPU, hugepages
+	// - AWS: Instance type hints, EBS optimization, placement groups
+	// - Azure: VM size hints, availability zones
+	// - OpenStack: Flavor hints, host aggregates
+	//
+	// Providers ignore hints they don't recognize, ensuring portability.
+	ProviderHints *map[string]map[string]interface{} `json:"providerHints,omitempty"`
+
+	// SchemaVersion Schema version identifier for this specification.
+	//
+	// Format: v<major><stability><minor>
+	// - major: Schema major version (e.g., v1, v2)
+	// - stability: alpha, beta, or omitted for stable
+	// - minor: Minor version number
+	//
+	// Examples: v1alpha1, v1beta1, v1, v2alpha1
+	//
+	// This field enables schema evolution while maintaining backward
+	// compatibility. Providers can support multiple schema versions
+	// simultaneously during transitions.
+	SchemaVersion *string `json:"schemaVersion,omitempty"`
+
+	// Storage Storage configuration.
+	// Based on OVF DiskSection for virtual disk specifications.
+	Storage *struct {
+		// Disks Virtual disk specifications.
+		// Minimum one disk required (boot disk).
+		Disks []struct {
+			// BootOrder Boot priority (1 = primary boot device).
+			// Only specify for bootable disks.
+			BootOrder *int `json:"bootOrder,omitempty"`
+
+			// Bus Disk bus/controller type (optional).
+			// Provider selects optimal default if not specified.
+			Bus *VMSpecStorageDisksBus `json:"bus,omitempty"`
+
+			// CapacityGB Disk capacity in gigabytes
+			CapacityGB int `json:"capacityGB"`
+
+			// Format Disk format (optional, provider-specific).
+			// - thin: Dynamically allocated
+			// - thick: Pre-allocated (lazy-zeroed)
+			// - thick-eager: Pre-allocated (eager-zeroed)
+			Format *VMSpecStorageDisksFormat `json:"format,omitempty"`
+
+			// Name Disk identifier (unique within VM).
+			// Convention: "boot", "data", "log", etc.
+			Name string `json:"name"`
+
+			// StorageProfile Storage profile/class (provider-specific).
+			// Examples: "ssd", "nvme", "standard", "premium"
+			StorageProfile *string `json:"storageProfile,omitempty"`
+		} `json:"disks"`
+	} `json:"storage,omitempty"`
 }
 
-// DeleteVMJSONRequestBody defines body for DeleteVM for application/json ContentType.
-type DeleteVMJSONRequestBody = VMRequest
+// VMSpecComputeVcpuThreads Threads per core (optional).
+// 1 = hyperthreading disabled, 2 = enabled.
+type VMSpecComputeVcpuThreads int
 
-// GetVMJSONRequestBody defines body for GetVM for application/json ContentType.
-type GetVMJSONRequestBody = VMRequest
+// VMSpecGuestOSArchitecture CPU architecture
+type VMSpecGuestOSArchitecture string
+
+// VMSpecGuestOSFamily OS family for provider hints (optional).
+// Helps providers select appropriate defaults.
+type VMSpecGuestOSFamily string
+
+// VMSpecGuestOSFirmware Firmware type.
+// - bios: Traditional BIOS (broad compatibility)
+// - uefi: UEFI firmware (required for modern OS, Secure Boot)
+type VMSpecGuestOSFirmware string
+
+// VMSpecNetworkInterfacesIpamMode IP address allocation mode
+type VMSpecNetworkInterfacesIpamMode string
+
+// VMSpecNetworkInterfacesModel Network adapter model (optional).
+// Provider selects optimal default if not specified.
+// - virtio: Paravirtualized (best performance)
+// - e1000/e1000e: Intel emulation (broad compatibility)
+// - vmxnet3: VMware paravirtualized
+type VMSpecNetworkInterfacesModel string
+
+// VMSpecStorageDisksBus Disk bus/controller type (optional).
+// Provider selects optimal default if not specified.
+type VMSpecStorageDisksBus string
+
+// VMSpecStorageDisksFormat Disk format (optional, provider-specific).
+// - thin: Dynamically allocated
+// - thick: Pre-allocated (lazy-zeroed)
+// - thick-eager: Pre-allocated (eager-zeroed)
+type VMSpecStorageDisksFormat string
 
 // CreateVMJSONRequestBody defines body for CreateVM for application/json ContentType.
-type CreateVMJSONRequestBody = VMRequest
+type CreateVMJSONRequestBody = VMSpec
 
 // ApplyVMJSONRequestBody defines body for ApplyVM for application/json ContentType.
-type ApplyVMJSONRequestBody = VMRequest
+type ApplyVMJSONRequestBody = VMSpec
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// Delete an application
-	// (DELETE /api/v1/vm)
-	DeleteVM(w http.ResponseWriter, r *http.Request)
 	// Get a virtual machine application
 	// (GET /api/v1/vm)
 	GetVM(w http.ResponseWriter, r *http.Request)
 	// Create a VM
 	// (POST /api/v1/vm)
 	CreateVM(w http.ResponseWriter, r *http.Request)
-	// Update an application
-	// (PUT /api/v1/vm)
-	ApplyVM(w http.ResponseWriter, r *http.Request)
 	// Health check
 	// (GET /api/v1/vm/health)
+	GetVMHealth(w http.ResponseWriter, r *http.Request)
+	// Delete an application
+	// (DELETE /api/v1/vm/{id})
+	DeleteVM(w http.ResponseWriter, r *http.Request, id string)
+	// Update an application
+	// (PUT /api/v1/vm/{id})
+	ApplyVM(w http.ResponseWriter, r *http.Request, id string)
+	// Health check
+	// (GET /health)
 	ListHealth(w http.ResponseWriter, r *http.Request)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
 
 type Unimplemented struct{}
-
-// Delete an application
-// (DELETE /api/v1/vm)
-func (_ Unimplemented) DeleteVM(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
 
 // Get a virtual machine application
 // (GET /api/v1/vm)
@@ -108,14 +408,26 @@ func (_ Unimplemented) CreateVM(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Health check
+// (GET /api/v1/vm/health)
+func (_ Unimplemented) GetVMHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete an application
+// (DELETE /api/v1/vm/{id})
+func (_ Unimplemented) DeleteVM(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Update an application
-// (PUT /api/v1/vm)
-func (_ Unimplemented) ApplyVM(w http.ResponseWriter, r *http.Request) {
+// (PUT /api/v1/vm/{id})
+func (_ Unimplemented) ApplyVM(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Health check
-// (GET /api/v1/vm/health)
+// (GET /health)
 func (_ Unimplemented) ListHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
@@ -128,21 +440,6 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
-
-// DeleteVM operation middleware
-func (siw *ServerInterfaceWrapper) DeleteVM(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteVM(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r.WithContext(ctx))
-}
 
 // GetVM operation middleware
 func (siw *ServerInterfaceWrapper) GetVM(w http.ResponseWriter, r *http.Request) {
@@ -174,12 +471,64 @@ func (siw *ServerInterfaceWrapper) CreateVM(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
+// GetVMHealth operation middleware
+func (siw *ServerInterfaceWrapper) GetVMHealth(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVMHealth(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// DeleteVM operation middleware
+func (siw *ServerInterfaceWrapper) DeleteVM(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteVM(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
 // ApplyVM operation middleware
 func (siw *ServerInterfaceWrapper) ApplyVM(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ApplyVM(w, r)
+		siw.Handler.ApplyVM(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -318,61 +667,28 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/api/v1/vm", wrapper.DeleteVM)
-	})
-	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/api/v1/vm", wrapper.GetVM)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/v1/vm", wrapper.CreateVM)
 	})
 	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/api/v1/vm", wrapper.ApplyVM)
+		r.Get(options.BaseURL+"/api/v1/vm/health", wrapper.GetVMHealth)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/api/v1/vm/health", wrapper.ListHealth)
+		r.Delete(options.BaseURL+"/api/v1/vm/{id}", wrapper.DeleteVM)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/api/v1/vm/{id}", wrapper.ApplyVM)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/health", wrapper.ListHealth)
 	})
 
 	return r
 }
 
-type DeleteVMRequestObject struct {
-	Body *DeleteVMJSONRequestBody
-}
-
-type DeleteVMResponseObject interface {
-	VisitDeleteVMResponse(w http.ResponseWriter) error
-}
-
-type DeleteVM204JSONResponse VM
-
-func (response DeleteVM204JSONResponse) VisitDeleteVMResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(204)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DeleteVM400JSONResponse Error
-
-func (response DeleteVM400JSONResponse) VisitDeleteVMResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(400)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type DeleteVM500JSONResponse Error
-
-func (response DeleteVM500JSONResponse) VisitDeleteVMResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(500)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
 type GetVMRequestObject struct {
-	Body *GetVMJSONRequestBody
 }
 
 type GetVMResponseObject interface {
@@ -441,7 +757,58 @@ func (response CreateVM500JSONResponse) VisitCreateVMResponse(w http.ResponseWri
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetVMHealthRequestObject struct {
+}
+
+type GetVMHealthResponseObject interface {
+	VisitGetVMHealthResponse(w http.ResponseWriter) error
+}
+
+type GetVMHealth200Response struct {
+}
+
+func (response GetVMHealth200Response) VisitGetVMHealthResponse(w http.ResponseWriter) error {
+	w.WriteHeader(200)
+	return nil
+}
+
+type DeleteVMRequestObject struct {
+	Id string `json:"id"`
+}
+
+type DeleteVMResponseObject interface {
+	VisitDeleteVMResponse(w http.ResponseWriter) error
+}
+
+type DeleteVM204JSONResponse VM
+
+func (response DeleteVM204JSONResponse) VisitDeleteVMResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(204)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteVM400JSONResponse Error
+
+func (response DeleteVM400JSONResponse) VisitDeleteVMResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type DeleteVM500JSONResponse Error
+
+func (response DeleteVM500JSONResponse) VisitDeleteVMResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ApplyVMRequestObject struct {
+	Id   string `json:"id"`
 	Body *ApplyVMJSONRequestBody
 }
 
@@ -493,20 +860,23 @@ func (response ListHealth200Response) VisitListHealthResponse(w http.ResponseWri
 
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
-	// Delete an application
-	// (DELETE /api/v1/vm)
-	DeleteVM(ctx context.Context, request DeleteVMRequestObject) (DeleteVMResponseObject, error)
 	// Get a virtual machine application
 	// (GET /api/v1/vm)
 	GetVM(ctx context.Context, request GetVMRequestObject) (GetVMResponseObject, error)
 	// Create a VM
 	// (POST /api/v1/vm)
 	CreateVM(ctx context.Context, request CreateVMRequestObject) (CreateVMResponseObject, error)
-	// Update an application
-	// (PUT /api/v1/vm)
-	ApplyVM(ctx context.Context, request ApplyVMRequestObject) (ApplyVMResponseObject, error)
 	// Health check
 	// (GET /api/v1/vm/health)
+	GetVMHealth(ctx context.Context, request GetVMHealthRequestObject) (GetVMHealthResponseObject, error)
+	// Delete an application
+	// (DELETE /api/v1/vm/{id})
+	DeleteVM(ctx context.Context, request DeleteVMRequestObject) (DeleteVMResponseObject, error)
+	// Update an application
+	// (PUT /api/v1/vm/{id})
+	ApplyVM(ctx context.Context, request ApplyVMRequestObject) (ApplyVMResponseObject, error)
+	// Health check
+	// (GET /health)
 	ListHealth(ctx context.Context, request ListHealthRequestObject) (ListHealthResponseObject, error)
 }
 
@@ -539,47 +909,9 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
-// DeleteVM operation middleware
-func (sh *strictHandler) DeleteVM(w http.ResponseWriter, r *http.Request) {
-	var request DeleteVMRequestObject
-
-	var body DeleteVMJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.DeleteVM(ctx, request.(DeleteVMRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "DeleteVM")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(DeleteVMResponseObject); ok {
-		if err := validResponse.VisitDeleteVMResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
 // GetVM operation middleware
 func (sh *strictHandler) GetVM(w http.ResponseWriter, r *http.Request) {
 	var request GetVMRequestObject
-
-	var body GetVMJSONRequestBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		sh.options.RequestErrorHandlerFunc(w, r, fmt.Errorf("can't decode JSON body: %w", err))
-		return
-	}
-	request.Body = &body
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetVM(ctx, request.(GetVMRequestObject))
@@ -632,9 +964,61 @@ func (sh *strictHandler) CreateVM(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GetVMHealth operation middleware
+func (sh *strictHandler) GetVMHealth(w http.ResponseWriter, r *http.Request) {
+	var request GetVMHealthRequestObject
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetVMHealth(ctx, request.(GetVMHealthRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetVMHealth")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetVMHealthResponseObject); ok {
+		if err := validResponse.VisitGetVMHealthResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// DeleteVM operation middleware
+func (sh *strictHandler) DeleteVM(w http.ResponseWriter, r *http.Request, id string) {
+	var request DeleteVMRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.DeleteVM(ctx, request.(DeleteVMRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "DeleteVM")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(DeleteVMResponseObject); ok {
+		if err := validResponse.VisitDeleteVMResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // ApplyVM operation middleware
-func (sh *strictHandler) ApplyVM(w http.ResponseWriter, r *http.Request) {
+func (sh *strictHandler) ApplyVM(w http.ResponseWriter, r *http.Request, id string) {
 	var request ApplyVMRequestObject
+
+	request.Id = id
 
 	var body ApplyVMJSONRequestBody
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {

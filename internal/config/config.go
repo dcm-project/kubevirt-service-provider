@@ -7,7 +7,17 @@ import (
 var singleConfig *Config = nil
 
 type Config struct {
-	Service *svcConfig
+	Service  *svcConfig
+	Database *dbConfig
+}
+
+type dbConfig struct {
+	Type     string `envconfig:"DB_TYPE" default:"pgsql"`
+	Hostname string `envconfig:"DB_HOST" default:"localhost"`
+	Port     string `envconfig:"DB_PORT" default:"5432"`
+	Name     string `envconfig:"DB_NAME" default:"kubevirt-provider"`
+	User     string `envconfig:"DB_USER" default:"admin"`
+	Password string `envconfig:"DB_PASS" default:"adminpass"`
 }
 
 type svcConfig struct {

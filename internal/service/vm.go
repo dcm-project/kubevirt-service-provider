@@ -6,10 +6,12 @@ import (
 	"log"
 
 	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
-	"github.com/dcm-project/kubevirt-service-provider/internal/service/model"
+	"github.com/dcm-project/kubevirt-service-provider/internal/service/mapper"
+	"github.com/dcm-project/kubevirt-service-provider/internal/store"
+	"github.com/dcm-project/kubevirt-service-provider/internal/store/model"
+	"github.com/google/uuid"
 	"github.com/spf13/pflag"
 	"go.uber.org/zap"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
@@ -18,59 +20,57 @@ import (
 
 type VMService struct {
 	client kubecli.KubevirtClient
+	store  store.Store
 }
 
-func NewVMService() *VMService {
+func NewVMService(store store.Store) *VMService {
 	virtClient, err := kubecli.GetKubevirtClientFromClientConfig(
 		kubecli.DefaultClientConfig(&pflag.FlagSet{}),
 	)
 	if err != nil {
 		log.Fatalf("cannot obtain KubeVirt client: %v\n", err)
 	}
-	return &VMService{client: virtClient}
+	return &VMService{client: virtClient, store: store}
 }
 
-func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSONRequestBody) (model.DeclaredVM, error) {
-	logger := zap.S().Named("vm_service:create_vm")
-	logger.Info("Starting VM creation for: ", *userRequest.Name)
+const (
+	StatusCreated    = "CREATED"
+	StatusInProgress = "IN_PROGRESS"
+	StatusReady      = "READY"
+)
 
-	request := model.Request{
-		OsImage:   *userRequest.OsImage,
-		Ram:       *userRequest.Ram,
-		Cpu:       *userRequest.Cpu,
-		RequestId: *userRequest.Id,
-		Namespace: *userRequest.Namespace,
-		VMName:    *userRequest.Name,
+func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSONRequestBody) (mapper.DeclaredVM, error) {
+	logger := zap.S().Named("vm_service:create_vm")
+
+	metadata := *userRequest.Metadata
+	appName, ok := metadata["application"]
+	if !ok {
+		logger.Warn("Application field not found in metadata")
+	}
+	id := uuid.New()
+
+	logger.Info("Starting VM creation for: ", appName)
+
+	namespace := "us-east-1"
+
+	request := mapper.Request{
+		OsImage:      v.getOSImage(userRequest.GuestOS.Type),
+		Ram:          userRequest.Compute.Memory.SizeGB,
+		Cpu:          userRequest.Compute.Vcpu.Count,
+		Architecture: string(*userRequest.GuestOS.Architecture),
+		RequestId:    id.String(),
+		VMName:       appName,
+		HostName:     *userRequest.Initialization.Hostname,
 	}
 
 	logger.Info("Starting deployment for Virtual Machine")
-
-	// Create Namespace for the Virtual Machine
-	namespace := request.Namespace
-	logger.Info("Creating namespace ", namespace)
-	// Check Namespace exists
-	_, err := v.client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
-	if err != nil {
-		// Create Namespace
-		ns := &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: namespace,
-			},
-		}
-		_, err = v.client.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
-		if err != nil {
-			logger.Error("Error occurred when creating namespace", err)
-			return model.DeclaredVM{}, fmt.Errorf("failed to create namespace %s: %w", namespace, err)
-		}
-	}
-	logger.Info("Successfully created namespace ", "Namespace ", namespace)
 
 	// Create the VirtualMachine object
 	memory := resource.MustParse(fmt.Sprintf("%dGi", request.Ram))
 	virtualMachine := &kubevirtv1.VirtualMachine{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: fmt.Sprintf("%s-", request.VMName),
-			Namespace:    namespace,
+			Namespace:    request.Namespace,
 			Labels: map[string]string{
 				"app-id": request.RequestId,
 			},
@@ -93,7 +93,7 @@ func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSO
 							},
 						},
 					},
-					Architecture: "amd64",
+					Architecture: request.Architecture,
 					Domain: kubevirtv1.DomainSpec{
 						CPU: &kubevirtv1.CPU{
 							Cores: uint32(request.Cpu),
@@ -175,29 +175,67 @@ func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSO
 	}
 
 	// Create the VirtualMachine in the cluster
-	_, err = v.client.VirtualMachine(namespace).Create(ctx, virtualMachine, metav1.CreateOptions{})
+	createdVM, err := v.client.VirtualMachine(namespace).Create(ctx, virtualMachine, metav1.CreateOptions{})
 	if err != nil {
-		return model.DeclaredVM{}, fmt.Errorf("failed to create VirtualMachine: %w", err)
+		return mapper.DeclaredVM{}, fmt.Errorf("failed to create VirtualMachine: %w", err)
 	}
 
-	logger.Info("Successfully created VM", userRequest.Id)
-	return model.DeclaredVM{ID: request.RequestId, RequestInfo: request}, nil
+	dbApp := model.ProviderApplication{
+		ID:           id,
+		OsImage:      request.OsImage,
+		Ram:          request.Ram,
+		Cpu:          request.Cpu,
+		Namespace:    request.Namespace,
+		VMName:       request.VMName,
+		Architecture: request.Architecture,
+		HostName:     request.HostName,
+	}
+
+	if createdVM.Status.Created {
+		dbApp.Status = StatusCreated
+	} else {
+		dbApp.Status = StatusInProgress
+	}
+
+	_, err = v.store.Application().Create(ctx, dbApp)
+	if err != nil {
+		return mapper.DeclaredVM{}, fmt.Errorf("failed to create application: %w", err)
+	}
+
+	logger.Info("Successfully created VM", request.RequestId)
+	return mapper.DeclaredVM{ID: request.RequestId, RequestInfo: request}, nil
 
 }
 
-func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) (model.DeclaredVM, error) {
+func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) (mapper.DeclaredVM, error) {
 	logger := zap.S().Named("service-provider:delete_app")
 	logger.Info("Deleting VM application", "ID ", appID)
 
-	return model.DeclaredVM{}, nil
+	return mapper.DeclaredVM{}, nil
 }
 
 // generateCloudInitUserData generates cloud-init user data for the VM
-func (v *VMService) generateCloudInitUserData(appName string, vm *model.Request) string {
+func (v *VMService) generateCloudInitUserData(hostname string, vm *mapper.Request) string {
 	return fmt.Sprintf(`#cloud-config
 user: %s
 password: auto-generated-pass
 chpasswd: { expire: False }
 hostname: %s
-`, vm.OsImage, appName)
+`, vm.OsImage, hostname)
+}
+
+// getOSImage returns the container image for the specified OS
+func (v *VMService) getOSImage(os string) string {
+	images := map[string]string{
+		"fedora": "quay.io/containerdisks/fedora:latest",
+		"ubuntu": "quay.io/containerdisks/ubuntu:latest",
+		"centos": "quay.io/containerdisks/centos:latest",
+		"rhel":   "quay.io/containerdisks/rhel:latest",
+	}
+
+	if image, exists := images[os]; exists {
+		return image
+	}
+	// Default to fedora if OS not found
+	return "quay.io/containerdisks/fedora:latest"
 }

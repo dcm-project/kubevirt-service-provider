@@ -105,4 +105,4 @@ help:
 	@echo "  generate        - Generate code from OpenAPI specification"
 	@echo "  help            - Show this help"
 
-#include deploy/deploy.mk
+include deploy/deploy.mk

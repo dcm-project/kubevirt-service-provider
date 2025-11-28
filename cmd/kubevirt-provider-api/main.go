@@ -9,6 +9,7 @@ import (
 
 	apiserver "github.com/dcm-project/kubevirt-service-provider/internal/api_server"
 	"github.com/dcm-project/kubevirt-service-provider/internal/config"
+	"github.com/dcm-project/kubevirt-service-provider/internal/store"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
@@ -38,10 +39,13 @@ var runCmd = &cobra.Command{
 
 		zap.S().Info("Starting API service...")
 		zap.S().Info("Initializing data store")
-
+		db, err := store.InitDB(cfg)
 		if err != nil {
 			zap.S().Fatalw("initializing data store", "error", err)
 		}
+
+		store := store.NewStore(db)
+		defer store.Close()
 
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
 
@@ -52,7 +56,7 @@ var runCmd = &cobra.Command{
 				zap.S().Fatalw("creating listener", "error", err)
 			}
 
-			server := apiserver.New(cfg, listener)
+			server := apiserver.New(cfg, store, listener)
 			if err := server.Run(ctx); err != nil {
 				zap.S().Fatalw("Error running server", "error", err)
 			}

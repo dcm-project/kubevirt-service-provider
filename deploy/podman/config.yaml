@@ -1,0 +1,12 @@
+database:
+  hostname: kubevirt-provider-db
+  type: pgsql
+  port: 5432
+  name: kubevirt-provider
+  user: admin
+  password: adminpass
+service:
+  address: :8082
+  baseUrl: http://localhost:8082
+  altNames:
+    - localhost
