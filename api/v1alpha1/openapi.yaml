@@ -33,15 +33,17 @@ paths:
   /api/v1/vm:
     get:
       summary: Get a virtual machine application
-      operationId: GetVM
-      description: Get a VM application
+      operationId: ListVM
+      description: List all VM applications
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VM'
+                type: array
+                items:
+                  $ref: '#/components/schemas/VM'
         '400':
           description: Bad request
           content:
@@ -85,6 +87,35 @@ paths:
                 $ref: '#/components/schemas/Error'
 
   /api/v1/vm/{id}:
+    get:
+      summary: Get a virtual machine application
+      operationId: GetVM
+      description: Get a VM application
+      parameters:
+        - name: id
+          schema:
+            type: string
+          required: true
+          in: path
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VM'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     put:
       summary: Update an application
       operationId: ApplyVM

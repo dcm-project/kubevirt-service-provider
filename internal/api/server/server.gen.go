@@ -374,7 +374,7 @@ type ApplyVMJSONRequestBody = VMSpec
 type ServerInterface interface {
 	// Get a virtual machine application
 	// (GET /api/v1/vm)
-	GetVM(w http.ResponseWriter, r *http.Request)
+	ListVM(w http.ResponseWriter, r *http.Request)
 	// Create a VM
 	// (POST /api/v1/vm)
 	CreateVM(w http.ResponseWriter, r *http.Request)
@@ -384,6 +384,9 @@ type ServerInterface interface {
 	// Delete an application
 	// (DELETE /api/v1/vm/{id})
 	DeleteVM(w http.ResponseWriter, r *http.Request, id string)
+	// Get a virtual machine application
+	// (GET /api/v1/vm/{id})
+	GetVM(w http.ResponseWriter, r *http.Request, id string)
 	// Update an application
 	// (PUT /api/v1/vm/{id})
 	ApplyVM(w http.ResponseWriter, r *http.Request, id string)
@@ -398,7 +401,7 @@ type Unimplemented struct{}
 
 // Get a virtual machine application
 // (GET /api/v1/vm)
-func (_ Unimplemented) GetVM(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) ListVM(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -417,6 +420,12 @@ func (_ Unimplemented) GetVMHealth(w http.ResponseWriter, r *http.Request) {
 // Delete an application
 // (DELETE /api/v1/vm/{id})
 func (_ Unimplemented) DeleteVM(w http.ResponseWriter, r *http.Request, id string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Get a virtual machine application
+// (GET /api/v1/vm/{id})
+func (_ Unimplemented) GetVM(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -441,12 +450,12 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(http.Handler) http.Handler
 
-// GetVM operation middleware
-func (siw *ServerInterfaceWrapper) GetVM(w http.ResponseWriter, r *http.Request) {
+// ListVM operation middleware
+func (siw *ServerInterfaceWrapper) ListVM(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetVM(w, r)
+		siw.Handler.ListVM(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -503,6 +512,32 @@ func (siw *ServerInterfaceWrapper) DeleteVM(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DeleteVM(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r.WithContext(ctx))
+}
+
+// GetVM operation middleware
+func (siw *ServerInterfaceWrapper) GetVM(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVM(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -667,7 +702,7 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	}
 
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/api/v1/vm", wrapper.GetVM)
+		r.Get(options.BaseURL+"/api/v1/vm", wrapper.ListVM)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/v1/vm", wrapper.CreateVM)
@@ -679,6 +714,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/api/v1/vm/{id}", wrapper.DeleteVM)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/api/v1/vm/{id}", wrapper.GetVM)
+	})
+	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/api/v1/vm/{id}", wrapper.ApplyVM)
 	})
 	r.Group(func(r chi.Router) {
@@ -688,34 +726,34 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	return r
 }
 
-type GetVMRequestObject struct {
+type ListVMRequestObject struct {
 }
 
-type GetVMResponseObject interface {
-	VisitGetVMResponse(w http.ResponseWriter) error
+type ListVMResponseObject interface {
+	VisitListVMResponse(w http.ResponseWriter) error
 }
 
-type GetVM200JSONResponse VM
+type ListVM200JSONResponse []VM
 
-func (response GetVM200JSONResponse) VisitGetVMResponse(w http.ResponseWriter) error {
+func (response ListVM200JSONResponse) VisitListVMResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetVM400JSONResponse Error
+type ListVM400JSONResponse Error
 
-func (response GetVM400JSONResponse) VisitGetVMResponse(w http.ResponseWriter) error {
+func (response ListVM400JSONResponse) VisitListVMResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetVM500JSONResponse Error
+type ListVM500JSONResponse Error
 
-func (response GetVM500JSONResponse) VisitGetVMResponse(w http.ResponseWriter) error {
+func (response ListVM500JSONResponse) VisitListVMResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(500)
 
@@ -807,6 +845,41 @@ func (response DeleteVM500JSONResponse) VisitDeleteVMResponse(w http.ResponseWri
 	return json.NewEncoder(w).Encode(response)
 }
 
+type GetVMRequestObject struct {
+	Id string `json:"id"`
+}
+
+type GetVMResponseObject interface {
+	VisitGetVMResponse(w http.ResponseWriter) error
+}
+
+type GetVM200JSONResponse VM
+
+func (response GetVM200JSONResponse) VisitGetVMResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetVM400JSONResponse Error
+
+func (response GetVM400JSONResponse) VisitGetVMResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(400)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetVM500JSONResponse Error
+
+func (response GetVM500JSONResponse) VisitGetVMResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(500)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 type ApplyVMRequestObject struct {
 	Id   string `json:"id"`
 	Body *ApplyVMJSONRequestBody
@@ -862,7 +935,7 @@ func (response ListHealth200Response) VisitListHealthResponse(w http.ResponseWri
 type StrictServerInterface interface {
 	// Get a virtual machine application
 	// (GET /api/v1/vm)
-	GetVM(ctx context.Context, request GetVMRequestObject) (GetVMResponseObject, error)
+	ListVM(ctx context.Context, request ListVMRequestObject) (ListVMResponseObject, error)
 	// Create a VM
 	// (POST /api/v1/vm)
 	CreateVM(ctx context.Context, request CreateVMRequestObject) (CreateVMResponseObject, error)
@@ -872,6 +945,9 @@ type StrictServerInterface interface {
 	// Delete an application
 	// (DELETE /api/v1/vm/{id})
 	DeleteVM(ctx context.Context, request DeleteVMRequestObject) (DeleteVMResponseObject, error)
+	// Get a virtual machine application
+	// (GET /api/v1/vm/{id})
+	GetVM(ctx context.Context, request GetVMRequestObject) (GetVMResponseObject, error)
 	// Update an application
 	// (PUT /api/v1/vm/{id})
 	ApplyVM(ctx context.Context, request ApplyVMRequestObject) (ApplyVMResponseObject, error)
@@ -909,23 +985,23 @@ type strictHandler struct {
 	options     StrictHTTPServerOptions
 }
 
-// GetVM operation middleware
-func (sh *strictHandler) GetVM(w http.ResponseWriter, r *http.Request) {
-	var request GetVMRequestObject
+// ListVM operation middleware
+func (sh *strictHandler) ListVM(w http.ResponseWriter, r *http.Request) {
+	var request ListVMRequestObject
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetVM(ctx, request.(GetVMRequestObject))
+		return sh.ssi.ListVM(ctx, request.(ListVMRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetVM")
+		handler = middleware(handler, "ListVM")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetVMResponseObject); ok {
-		if err := validResponse.VisitGetVMResponse(w); err != nil {
+	} else if validResponse, ok := response.(ListVMResponseObject); ok {
+		if err := validResponse.VisitListVMResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1007,6 +1083,32 @@ func (sh *strictHandler) DeleteVM(w http.ResponseWriter, r *http.Request, id str
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(DeleteVMResponseObject); ok {
 		if err := validResponse.VisitDeleteVMResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetVM operation middleware
+func (sh *strictHandler) GetVM(w http.ResponseWriter, r *http.Request, id string) {
+	var request GetVMRequestObject
+
+	request.Id = id
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetVM(ctx, request.(GetVMRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetVM")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetVMResponseObject); ok {
+		if err := validResponse.VisitGetVMResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

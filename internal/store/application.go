@@ -14,6 +14,7 @@ type ProviderApplication interface {
 	Create(ctx context.Context, app model.ProviderApplication) (*model.ProviderApplication, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	Get(ctx context.Context, id uuid.UUID) (*model.ProviderApplication, error)
+	Update(ctx context.Context, app model.ProviderApplication) error
 }
 
 type ProviderApplicationStore struct {
@@ -28,7 +29,7 @@ func NewProviderApplication(db *gorm.DB) ProviderApplication {
 
 func (s *ProviderApplicationStore) List(ctx context.Context) (model.ProviderApplicationList, error) {
 	var apps model.ProviderApplicationList
-	tx := s.db.Model(&apps)
+	tx := s.db.WithContext(ctx).Model(&apps)
 	result := tx.Find(&apps)
 	if result.Error != nil {
 		return nil, result.Error
@@ -37,7 +38,7 @@ func (s *ProviderApplicationStore) List(ctx context.Context) (model.ProviderAppl
 }
 
 func (s *ProviderApplicationStore) Delete(ctx context.Context, id uuid.UUID) error {
-	result := s.db.Delete(&model.ProviderApplication{}, id)
+	result := s.db.WithContext(ctx).Delete(&model.ProviderApplication{}, id)
 	if result.Error != nil {
 		return result.Error
 	}
@@ -45,7 +46,7 @@ func (s *ProviderApplicationStore) Delete(ctx context.Context, id uuid.UUID) err
 }
 
 func (s *ProviderApplicationStore) Create(ctx context.Context, app model.ProviderApplication) (*model.ProviderApplication, error) {
-	result := s.db.Clauses(clause.Returning{}).Create(&app)
+	result := s.db.WithContext(ctx).Clauses(clause.Returning{}).Create(&app)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -55,9 +56,17 @@ func (s *ProviderApplicationStore) Create(ctx context.Context, app model.Provide
 
 func (s *ProviderApplicationStore) Get(ctx context.Context, id uuid.UUID) (*model.ProviderApplication, error) {
 	var app model.ProviderApplication
-	result := s.db.First(&app, id)
+	result := s.db.WithContext(ctx).First(&app, id)
 	if result.Error != nil {
 		return nil, result.Error
 	}
 	return &app, nil
+}
+
+func (s *ProviderApplicationStore) Update(ctx context.Context, app model.ProviderApplication) error {
+	result := s.db.WithContext(ctx).Model(&model.ProviderApplication{}).Where("id = ?", app.ID).Updates(app)
+	if result.Error != nil {
+		return result.Error
+	}
+	return nil
 }

@@ -9,6 +9,7 @@ type Request struct {
 	VMName       string
 	Architecture string
 	HostName     string
+	SshKeys      []string
 }
 
 type DeclaredVM struct {

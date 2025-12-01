@@ -41,12 +41,20 @@ func (s *ServiceHandler) CreateVM(ctx context.Context, request server.CreateVMRe
 	return server.CreateVM201JSONResponse{Id: &vm.ID, Name: &vm.RequestInfo.VMName, Namespace: &vm.RequestInfo.Namespace}, nil
 }
 
-// GetVM (GET /api/v1/vm)
+// GetVM (GET /api/v1/vm/{id})
 func (s *ServiceHandler) GetVM(ctx context.Context, request server.GetVMRequestObject) (server.GetVMResponseObject, error) {
 	logger := zap.S().Named("handler")
 	logger.Info("Retrieving provider: ", "ID: ", request)
 
 	return server.GetVM200JSONResponse{}, nil
+}
+
+// GetVM (GET /api/v1/vm)
+func (s *ServiceHandler) ListVM(ctx context.Context, request server.ListVMRequestObject) (server.ListVMResponseObject, error) {
+	logger := zap.S().Named("handler")
+	logger.Info("Retrieving provider: ", "ID: ", request)
+
+	return server.ListVM200JSONResponse{}, nil
 }
 
 // ApplyVM (PUT /api/v1/vm)
