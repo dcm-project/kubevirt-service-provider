@@ -18,25 +18,30 @@ func NewServiceHandler(providerService *service.VMService) *ServiceHandler {
 	}
 }
 
-// (GET /health)
+// ListHealth (GET /health)
 func (s *ServiceHandler) ListHealth(ctx context.Context, request server.ListHealthRequestObject) (server.ListHealthResponseObject, error) {
 	return server.ListHealth200Response{}, nil
 }
 
-// CreateVM (POST /v1/vm)
+// GetVMHealth (GET /api/v1/vm/health)
+func (s *ServiceHandler) GetVMHealth(ctx context.Context, request server.GetVMHealthRequestObject) (server.GetVMHealthResponseObject, error) {
+	return server.GetVMHealth200Response{}, nil
+}
+
+// CreateVM (POST /api/v1/vm)
 func (s *ServiceHandler) CreateVM(ctx context.Context, request server.CreateVMRequestObject) (server.CreateVMResponseObject, error) {
 	logger := zap.S().Named("handler:create-vm")
-	logger.Info("Creating VM. ", "VM: ", request)
+	logger.Info("Creating virtual machine...")
 	vm, err := s.vmService.CreateVM(ctx, *request.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	logger.Info("Successfully created VM application. ", "VM: ", *request.Body.Name)
+	logger.Info("Successfully created VM application. ", "VM: ", vm.ID)
 	return server.CreateVM201JSONResponse{Id: &vm.ID, Name: &vm.RequestInfo.VMName, Namespace: &vm.RequestInfo.Namespace}, nil
 }
 
-// GetVM (GET /v1/vm)
+// GetVM (GET /api/v1/vm/{id})
 func (s *ServiceHandler) GetVM(ctx context.Context, request server.GetVMRequestObject) (server.GetVMResponseObject, error) {
 	logger := zap.S().Named("handler")
 	logger.Info("Retrieving provider: ", "ID: ", request)
@@ -44,7 +49,15 @@ func (s *ServiceHandler) GetVM(ctx context.Context, request server.GetVMRequestO
 	return server.GetVM200JSONResponse{}, nil
 }
 
-// ApplyVM (PUT /v1/vm)
+// GetVM (GET /api/v1/vm)
+func (s *ServiceHandler) ListVM(ctx context.Context, request server.ListVMRequestObject) (server.ListVMResponseObject, error) {
+	logger := zap.S().Named("handler")
+	logger.Info("Retrieving provider: ", "ID: ", request)
+
+	return server.ListVM200JSONResponse{}, nil
+}
+
+// ApplyVM (PUT /api/v1/vm)
 func (s *ServiceHandler) ApplyVM(ctx context.Context, request server.ApplyVMRequestObject) (server.ApplyVMResponseObject, error) {
 	logger := zap.S().Named("handler")
 	logger.Info("Retrieving provider: ", "ID: ", request)
@@ -56,7 +69,8 @@ func (s *ServiceHandler) ApplyVM(ctx context.Context, request server.ApplyVMRequ
 func (s *ServiceHandler) DeleteVM(ctx context.Context, request server.DeleteVMRequestObject) (server.DeleteVMResponseObject, error) {
 	logger := zap.S().Named("service-provider")
 	logger.Info("Deleting Application. ", "VM: ", request)
-	appID := request.Body.Id
+
+	appID := &request.Id
 	declaredVM, err := s.vmService.DeleteVMApplication(ctx, appID)
 	if err != nil {
 		logger.Error("Failed to Delete VM application")
