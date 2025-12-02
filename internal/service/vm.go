@@ -249,6 +249,84 @@ func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) (map
 	return mapper.DeclaredVM{}, nil
 }
 
+func (v *VMService) ListVMsFromDatabase(ctx context.Context) ([]server.VM, error) {
+	logger := zap.S().Named("vm_service:list_vms_from_database")
+	logger.Info("Listing VMs from database")
+
+	apps, err := v.store.Application().List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list applications: %w", err)
+	}
+
+	var vms []server.VM
+	for _, app := range apps {
+		idStr := app.ID.String()
+		vms = append(vms, server.VM{
+			Id:        &idStr,
+			Name:      &app.VMName,
+			Namespace: &app.Namespace,
+		})
+	}
+
+	logger.Infow("Successfully retrieved VMs", "count", len(vms))
+	return vms, nil
+}
+
+// GetVMFromCluster retrieves a VM from the cluster by request ID
+func (v *VMService) GetVMFromCluster(ctx context.Context, requestID string) ([]server.VM, error) {
+	logger := zap.S().Named("vm_service:get_vm_from_cluster")
+	logger.Infow("Getting VM from cluster", "requestID", requestID)
+
+	// Parse the request ID to UUID
+	vmID, err := uuid.Parse(requestID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid request ID format: %w", err)
+	}
+
+	// First, get the VM from database to get namespace
+	dbApp, err := v.store.Application().Get(ctx, vmID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get VM from database: %w", err)
+	}
+
+	namespace := dbApp.Namespace
+
+	// List all VMs in the namespace and find the one with matching app-id label
+	vmList, err := v.kubevirtClient.VirtualMachine(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app-id=%s", requestID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list VMs in namespace %s: %w", namespace, err)
+	}
+
+	if len(vmList.Items) == 0 {
+
+		logger.Warnw("No VM found in cluster with request ID", "requestID", requestID, "namespace", namespace)
+		// Return the database record even if not found in cluster
+		return []server.VM{
+			{
+				Id:        &requestID,
+				Name:      &dbApp.VMName,
+				Namespace: &dbApp.Namespace,
+			},
+		}, nil
+	}
+
+	// Convert cluster VM to API response
+	vms := make([]server.VM, 0, len(vmList.Items))
+	for _, vm := range vmList.Items {
+		vmName := vm.Name
+		vms = append(vms, server.VM{
+			Id:        &requestID,
+			Name:      &vmName,
+			Namespace: &namespace,
+		})
+	}
+
+	logger.Infof("Found %d VM(s) in cluster with request ID %s", len(vms), requestID)
+	return vms, nil
+}
+
 // generateCloudInitUserData generates cloud-init user data for the VM
 func (v *VMService) generateCloudInitUserData(hostname string, vm *mapper.Request) string {
 	return fmt.Sprintf(`#cloud-config

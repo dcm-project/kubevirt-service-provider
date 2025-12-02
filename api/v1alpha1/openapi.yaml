@@ -32,9 +32,20 @@ paths:
 
   /api/v1/vm:
     get:
-      summary: Get a virtual machine application
+      summary: List virtual machine applications
       operationId: ListVM
-      description: List all VM applications
+      description: |
+        List all virtual machine applications. Optionally filter by request ID 
+        by providing it in the request body.
+      parameters:
+        - name: id
+          in: query
+          required: false
+          description: Optional request ID to filter VMs. If not provided, returns all VMs.
+          schema:
+            type: string
+            format: uuid
+            example: "123e4567-e89b-12d3-a456-426614174000"
       responses:
         '200':
           description: OK
@@ -86,100 +97,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/v1/vm/{id}:
-    get:
-      summary: Get a virtual machine application
-      operationId: GetVM
-      description: Get a VM application
-      parameters:
-        - name: id
-          schema:
-            type: string
-          required: true
-          in: path
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VM'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-    put:
-      summary: Update an application
-      operationId: ApplyVM
-      description: Update a KubeVirt VM application
-      parameters:
-        - name: id
-          schema:
-            type: string
-          required: true
-          in: path
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VMSpec'
-      responses:
-        '201':
-          description: Updated Content
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VM'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-    delete:
-      summary: Delete an application
-      operationId: DeleteVM
-      description: Delete a KubeVirt application
-      parameters:
-        - name: id
-          schema:
-            type: string
-          required: true
-          in: path
-      responses:
-        '204':
-          description: No Content
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VM'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
 components:
   schemas:

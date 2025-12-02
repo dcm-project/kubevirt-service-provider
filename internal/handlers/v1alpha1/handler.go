@@ -41,20 +41,32 @@ func (s *ServiceHandler) CreateVM(ctx context.Context, request server.CreateVMRe
 	return server.CreateVM201JSONResponse{Id: &vm.ID, Name: &vm.RequestInfo.VMName, Namespace: &vm.RequestInfo.Namespace}, nil
 }
 
-// GetVM (GET /api/v1/vm/{id})
-func (s *ServiceHandler) GetVM(ctx context.Context, request server.GetVMRequestObject) (server.GetVMResponseObject, error) {
-	logger := zap.S().Named("handler")
-	logger.Info("Retrieving provider: ", "ID: ", request)
-
-	return server.GetVM200JSONResponse{}, nil
-}
-
-// GetVM (GET /api/v1/vm)
+// ListVM (GET /api/v1/vm)
 func (s *ServiceHandler) ListVM(ctx context.Context, request server.ListVMRequestObject) (server.ListVMResponseObject, error) {
-	logger := zap.S().Named("handler")
-	logger.Info("Retrieving provider: ", "ID: ", request)
+	logger := zap.S().Named("handler: list-vm")
 
-	return server.ListVM200JSONResponse{}, nil
+	var vms []server.VM
+	var err error
+
+	// Check if request ID is provided in the body
+	if request.Params.Id != nil && request.Params.Id.String() != "" {
+		logger.Infow("Request ID provided, fetching VM from cluster", "id", *request.Params.Id)
+		vms, err = s.vmService.GetVMFromCluster(ctx, request.Params.Id.String())
+	} else {
+		logger.Info("No request ID provided, listing all VMs from database")
+		vms, err = s.vmService.ListVMsFromDatabase(ctx)
+	}
+
+	if err != nil {
+		logger.Errorw("Failed to list VMs", "error", err)
+		return server.ListVM500JSONResponse{
+			Error: err.Error(),
+			Code:  &[]int{500}[0],
+		}, nil
+	}
+
+	logger.Infow("Successfully retrieved VMs", "count", len(vms))
+	return server.ListVM200JSONResponse(vms), nil
 }
 
 // ApplyVM (PUT /api/v1/vm)

@@ -37,6 +37,7 @@ type Server struct {
 	cfg      *config.Config
 	store    store.Store
 	listener net.Listener
+	//vmStatusSync *service.VMStatusSyncService
 }
 
 // New returns a new instance of a migration-planner server.
