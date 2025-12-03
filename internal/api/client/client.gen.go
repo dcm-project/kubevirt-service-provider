@@ -369,7 +369,7 @@ type ClientWithResponsesInterface interface {
 type ListVMResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *[]VM
+	JSON200      *[]VMInstance
 	JSON400      *Error
 	JSON500      *Error
 }
@@ -515,7 +515,7 @@ func ParseListVMResponse(rsp *http.Response) (*ListVMResponse, error) {
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []VM
+		var dest []VMInstance
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

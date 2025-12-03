@@ -101,6 +101,9 @@ type VMInstance struct {
 	// Namespace Kubernetes namespace where the VM is running
 	Namespace *string `json:"namespace,omitempty"`
 
+	// RequestId Request ID (UUID) of the VM instance
+	RequestId *openapi_types.UUID `json:"requestId,omitempty"`
+
 	// Ssh SSH access configuration for the VM
 	Ssh *struct {
 		// ConnectMethods Available methods to connect to the VM via SSH

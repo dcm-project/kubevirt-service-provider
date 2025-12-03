@@ -17,6 +17,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 	"kubevirt.io/client-go/kubecli"
 )
@@ -85,18 +86,27 @@ func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSO
 	logger.Info("Starting deployment for Virtual Machine")
 
 	// Create the VirtualMachine in the cluster
-	_, err = v.kubevirtClient.VirtualMachine(namespace).Create(ctx, virtualMachine, metav1.CreateOptions{})
+	createdVM, err := v.kubevirtClient.VirtualMachine(namespace).Create(ctx, virtualMachine, metav1.CreateOptions{})
 	if err != nil {
 		return mapper.DeclaredVM{}, fmt.Errorf("failed to create VirtualMachine: %w", err)
 	}
+
+	// Create NodePort service for SSH if SSH keys are provided
+	if len(request.SshKeys) > 0 {
+		if err := v.createSSHNodePortService(ctx, createdVM, request.RequestId); err != nil {
+			logger.Warnw("Failed to create SSH NodePort service", "error", err)
+			// Don't fail VM creation if service creation fails
+		}
+	}
+
 	// save to database
-	err = v.saveToStore(ctx, request)
+	dbApp, err := v.saveToStore(ctx, request)
 	if err != nil {
 		return mapper.DeclaredVM{}, fmt.Errorf("failed to save VM in database: %w", err)
 	}
 
 	logger.Info("Successfully created VM", request.RequestId)
-	return mapper.DeclaredVM{ID: request.RequestId, RequestInfo: request}, nil
+	return mapper.DeclaredVM{ID: request.RequestId, RequestInfo: request, Status: dbApp.Status}, nil
 }
 
 func (v *VMService) createVMObject(ctx context.Context, request mapper.Request) (*kubevirtv1.VirtualMachine, error) {
@@ -114,6 +124,11 @@ func (v *VMService) createVMObject(ctx context.Context, request mapper.Request) 
 		Spec: kubevirtv1.VirtualMachineSpec{
 			RunStrategy: &[]kubevirtv1.VirtualMachineRunStrategy{kubevirtv1.RunStrategyRerunOnFailure}[0],
 			Template: &kubevirtv1.VirtualMachineInstanceTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app-id": request.RequestId,
+					},
+				},
 				Spec: kubevirtv1.VirtualMachineInstanceSpec{
 					Architecture: request.Architecture,
 					Domain: kubevirtv1.DomainSpec{
@@ -209,7 +224,7 @@ func (v *VMService) createVMObject(ctx context.Context, request mapper.Request) 
 			}
 			allKeys := strings.Join(mergedKeys, "\n")
 
-			sshSecretName := fmt.Sprintf("%s-ssh-key", virtualMachine.GenerateName)
+			sshSecretName := fmt.Sprintf("%sssh-key", virtualMachine.GenerateName)
 			if err := ensureSSHSecretAndAccessCredentials(ctx, v.kubevirtClient, virtualMachine, allKeys, sshSecretName); err != nil {
 				return nil, err
 			}
@@ -219,7 +234,7 @@ func (v *VMService) createVMObject(ctx context.Context, request mapper.Request) 
 	return virtualMachine, nil
 }
 
-func (v *VMService) saveToStore(ctx context.Context, request mapper.Request) error {
+func (v *VMService) saveToStore(ctx context.Context, request mapper.Request) (model.ProviderApplication, error) {
 	logger := zap.S().Named("vm_service:save_to_store")
 	logger.Info("Saving created VM to store")
 
@@ -237,9 +252,9 @@ func (v *VMService) saveToStore(ctx context.Context, request mapper.Request) err
 
 	_, err := v.store.Application().Create(ctx, dbApp)
 	if err != nil {
-		return fmt.Errorf("failed to create application: %w", err)
+		return model.ProviderApplication{}, fmt.Errorf("failed to create application: %w", err)
 	}
-	return nil
+	return dbApp, nil
 }
 
 func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) (mapper.DeclaredVM, error) {
@@ -249,7 +264,7 @@ func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) (map
 	return mapper.DeclaredVM{}, nil
 }
 
-func (v *VMService) ListVMsFromDatabase(ctx context.Context) ([]server.VM, error) {
+func (v *VMService) ListVMsFromDatabase(ctx context.Context) ([]server.VMInstance, error) {
 	logger := zap.S().Named("vm_service:list_vms_from_database")
 	logger.Info("Listing VMs from database")
 
@@ -258,13 +273,17 @@ func (v *VMService) ListVMsFromDatabase(ctx context.Context) ([]server.VM, error
 		return nil, fmt.Errorf("failed to list applications: %w", err)
 	}
 
-	var vms []server.VM
+	var vms []server.VMInstance
 	for _, app := range apps {
-		idStr := app.ID.String()
-		vms = append(vms, server.VM{
-			Id:        &idStr,
+		idUuidFmt, err := uuid.Parse(app.ID.String())
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse application ID %q: %w", app.ID.String(), err)
+		}
+		vms = append(vms, server.VMInstance{
+			RequestId: &idUuidFmt,
 			Name:      &app.VMName,
 			Namespace: &app.Namespace,
+			Status:    &app.Status,
 		})
 	}
 
@@ -273,7 +292,7 @@ func (v *VMService) ListVMsFromDatabase(ctx context.Context) ([]server.VM, error
 }
 
 // GetVMFromCluster retrieves a VM from the cluster by request ID
-func (v *VMService) GetVMFromCluster(ctx context.Context, requestID string) ([]server.VM, error) {
+func (v *VMService) GetVMFromCluster(ctx context.Context, requestID string) ([]server.VMInstance, error) {
 	logger := zap.S().Named("vm_service:get_vm_from_cluster")
 	logger.Infow("Getting VM from cluster", "requestID", requestID)
 
@@ -303,24 +322,58 @@ func (v *VMService) GetVMFromCluster(ctx context.Context, requestID string) ([]s
 
 		logger.Warnw("No VM found in cluster with request ID", "requestID", requestID, "namespace", namespace)
 		// Return the database record even if not found in cluster
-		return []server.VM{
+		idUuidFmt, err := uuid.Parse(requestID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid request ID format: %w", err)
+		}
+		return []server.VMInstance{
 			{
-				Id:        &requestID,
+				RequestId: &idUuidFmt,
 				Name:      &dbApp.VMName,
 				Namespace: &dbApp.Namespace,
+				Status:    &dbApp.Status,
 			},
 		}, nil
 	}
 
-	// Convert cluster VM to API response
-	vms := make([]server.VM, 0, len(vmList.Items))
+	// Get VirtualMachineInstance to get IP and status
+	vmiList, err := v.kubevirtClient.VirtualMachineInstance(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app-id=%s", requestID),
+	})
+
+	// Convert cluster VM to VMInstance response
+	vms := make([]server.VMInstance, 0, len(vmList.Items))
 	for _, vm := range vmList.Items {
 		vmName := vm.Name
-		vms = append(vms, server.VM{
-			Id:        &requestID,
+		vmInstance := server.VMInstance{
 			Name:      &vmName,
 			Namespace: &namespace,
-		})
+		}
+
+		// Get VMI status and IP
+		var vmiIP string
+		var vmiStatus string
+		if err == nil && len(vmiList.Items) > 0 {
+			vmi := vmiList.Items[0]
+			vmiStatus = string(vmi.Status.Phase)
+
+			// Get IP from VMI interfaces
+			if len(vmi.Status.Interfaces) > 0 {
+				vmiIP = vmi.Status.Interfaces[0].IP
+			}
+		} else {
+			// Fallback to database status if VMI not found
+			vmiStatus = dbApp.Status
+		}
+
+		vmInstance.Status = &vmiStatus
+		if vmiIP != "" {
+			vmInstance.Ip = &vmiIP
+		}
+
+		// Build SSH configuration directly on VMInstance
+		v.populateSSHConfiguration(ctx, &vmInstance, &vm, requestID, vmiIP, dbApp.OsImage)
+		vms = append(vms, vmInstance)
 	}
 
 	logger.Infof("Found %d VM(s) in cluster with request ID %s", len(vms), requestID)
@@ -425,4 +478,141 @@ func (v *VMService) NamespaceExists(ctx context.Context, namespace string) (bool
 		return false, fmt.Errorf("failed to check namespace %q: %w", namespace, err)
 	}
 	return true, nil
+}
+
+// createSSHNodePortService creates a NodePort service to expose SSH access to the VM
+func (v *VMService) createSSHNodePortService(ctx context.Context, vm *kubevirtv1.VirtualMachine, requestID string) error {
+	logger := zap.S().Named("vm_service:create_ssh_nodeport")
+	logger.Info("Creating NodePort service for SSH access")
+
+	// Service name based on VM name
+	serviceName := fmt.Sprintf("%s-ssh", vm.Name)
+	if serviceName == "-ssh" {
+		// If VM name is empty (using GenerateName), use request ID
+		serviceName = fmt.Sprintf("%s-ssh", requestID)
+	}
+
+	// Create NodePort service
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: vm.Namespace,
+			Labels: map[string]string{
+				"app-id":       requestID,
+				"service-type": "ssh",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeNodePort,
+			Selector: map[string]string{
+				"app-id": requestID,
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "ssh",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       22,
+					TargetPort: intstr.FromInt32(22),
+				},
+			},
+		},
+	}
+
+	_, err := v.kubevirtClient.CoreV1().Services(vm.Namespace).Create(ctx, service, metav1.CreateOptions{})
+	if apierrors.IsAlreadyExists(err) {
+		logger.Infow("SSH NodePort service already exists", "service", serviceName)
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to create SSH NodePort service: %w", err)
+	}
+
+	logger.Infow("Successfully created SSH NodePort service", "service", serviceName)
+	return nil
+}
+
+// populateSSHConfiguration populates SSH configuration directly on the VMInstance
+func (v *VMService) populateSSHConfiguration(ctx context.Context, vmInstance *server.VMInstance, vm *kubevirtv1.VirtualMachine, requestID, vmIP, osImage string) {
+	logger := zap.S().Named("vm_service:populate_ssh_config")
+
+	// Check if VM has SSH access credentials configured
+	var sshSecretName string
+	sshEnabled := false
+
+	if vm.Spec.Template != nil && len(vm.Spec.Template.Spec.AccessCredentials) > 0 {
+		for _, cred := range vm.Spec.Template.Spec.AccessCredentials {
+			if cred.SSHPublicKey != nil && cred.SSHPublicKey.Source.Secret != nil {
+				sshEnabled = true
+				sshSecretName = cred.SSHPublicKey.Source.Secret.SecretName
+				break
+			}
+		}
+	}
+
+	if !sshEnabled {
+		return
+	}
+
+	// Get SSH username from OS image
+	//sshUsername := v.getSSHUsername(osImage)
+	sshUsername := vmInstance.Name
+
+	// Build clusterSSH command if IP is available
+	var clusterSSH *string
+	if vmIP != "" {
+		clusterSSHCmd := fmt.Sprintf("ssh %s@%s", sshUsername, vmIP)
+		clusterSSH = &clusterSSHCmd
+	}
+
+	// Get NodePort service details
+	var nodePortConfig *struct {
+		Node *string `json:"node,omitempty"`
+		Port *int    `json:"port,omitempty"`
+	}
+
+	serviceName := fmt.Sprintf("%s-ssh", vm.Name)
+	if serviceName == "-ssh" {
+		serviceName = fmt.Sprintf("%s-ssh", requestID)
+	}
+
+	// Build ConnectMethods
+	var connectMethods *struct {
+		ClusterSSH *string `json:"clusterSSH,omitempty"`
+		NodePort   *struct {
+			Node *string `json:"node,omitempty"`
+			Port *int    `json:"port,omitempty"`
+		} `json:"nodePort,omitempty"`
+	}
+
+	if clusterSSH != nil {
+		connectMethods = &struct {
+			ClusterSSH *string `json:"clusterSSH,omitempty"`
+			NodePort   *struct {
+				Node *string `json:"node,omitempty"`
+				Port *int    `json:"port,omitempty"`
+			} `json:"nodePort,omitempty"`
+		}{
+			ClusterSSH: clusterSSH,
+			NodePort:   nodePortConfig,
+		}
+	}
+	// Initialize SSH struct on VMInstance - build it to match the exact generated type structure
+	vmInstance.Ssh = &struct {
+		ConnectMethods *struct {
+			ClusterSSH *string `json:"clusterSSH,omitempty"`
+			NodePort   *struct {
+				Node *string `json:"node,omitempty"`
+				Port *int    `json:"port,omitempty"`
+			} `json:"nodePort,omitempty"`
+		} `json:"connectMethods,omitempty"`
+		Enabled    *bool   `json:"enabled,omitempty"`
+		SecretName *string `json:"secretName,omitempty"`
+		Username   *string `json:"username,omitempty"`
+	}{
+		ConnectMethods: connectMethods,
+		Enabled:        &sshEnabled,
+		SecretName:     &sshSecretName,
+		Username:       sshUsername,
+	}
+	logger.Info("Successfully populated SSH configuration on VMInstance")
 }
