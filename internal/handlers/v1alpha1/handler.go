@@ -37,8 +37,8 @@ func (s *ServiceHandler) CreateVM(ctx context.Context, request server.CreateVMRe
 		return nil, err
 	}
 
-	logger.Info("Successfully created VM application. ", "VM: ", vm.ID)
-	return server.CreateVM201JSONResponse{Id: &vm.ID, Name: &vm.RequestInfo.VMName, Namespace: &vm.RequestInfo.Namespace}, nil
+	logger.Info("Successfully created VM application. ", "VM: ", vm.Id)
+	return server.CreateVM201JSONResponse(vm), nil
 }
 
 // ListVM (GET /api/v1/vm)
@@ -61,7 +61,6 @@ func (s *ServiceHandler) ListVM(ctx context.Context, request server.ListVMReques
 		logger.Errorw("Failed to list VMs", "error", err)
 		return server.ListVM500JSONResponse{
 			Error: err.Error(),
-			Code:  &[]int{500}[0],
 		}, nil
 	}
 

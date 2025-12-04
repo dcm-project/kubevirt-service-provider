@@ -88,6 +88,9 @@ type Error struct {
 
 // VM defines model for VM.
 type VM struct {
+	// Status The status of the created VM
+	Status *string `json:"Status,omitempty"`
+
 	// Id ID of the VM
 	Id *string `json:"id,omitempty"`
 

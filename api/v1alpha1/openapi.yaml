@@ -586,6 +586,9 @@ components:
         namespace:
           type: string
           description: Namespace of the VM
+        Status:
+          type: string
+          description: The status of the created VM
     VMInstance:
       type: object
       description: VM instance information including status, IP address, and SSH connection details
