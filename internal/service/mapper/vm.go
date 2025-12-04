@@ -15,4 +15,5 @@ type Request struct {
 type DeclaredVM struct {
 	RequestInfo Request
 	ID          string
+	Status      string
 }

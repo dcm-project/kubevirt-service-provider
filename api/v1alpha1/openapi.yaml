@@ -32,9 +32,20 @@ paths:
 
   /api/v1/vm:
     get:
-      summary: Get a virtual machine application
+      summary: List virtual machine applications
       operationId: ListVM
-      description: List all VM applications
+      description: |
+        List all virtual machine applications. Optionally filter by request ID 
+        by providing it in the request body.
+      parameters:
+        - name: id
+          in: query
+          required: false
+          description: Optional request ID to filter VMs. If not provided, returns all VMs.
+          schema:
+            type: string
+            format: uuid
+            example: "123e4567-e89b-12d3-a456-426614174000"
       responses:
         '200':
           description: OK
@@ -43,7 +54,7 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/VM'
+                  $ref: '#/components/schemas/VMInstance'
         '400':
           description: Bad request
           content:
@@ -86,100 +97,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/v1/vm/{id}:
-    get:
-      summary: Get a virtual machine application
-      operationId: GetVM
-      description: Get a VM application
-      parameters:
-        - name: id
-          schema:
-            type: string
-          required: true
-          in: path
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VM'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-    put:
-      summary: Update an application
-      operationId: ApplyVM
-      description: Update a KubeVirt VM application
-      parameters:
-        - name: id
-          schema:
-            type: string
-          required: true
-          in: path
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/VMSpec'
-      responses:
-        '201':
-          description: Updated Content
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VM'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-    delete:
-      summary: Delete an application
-      operationId: DeleteVM
-      description: Delete a KubeVirt application
-      parameters:
-        - name: id
-          schema:
-            type: string
-          required: true
-          in: path
-      responses:
-        '204':
-          description: No Content
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VM'
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 
 components:
   schemas:
@@ -669,6 +586,72 @@ components:
         namespace:
           type: string
           description: Namespace of the VM
+        Status:
+          type: string
+          description: The status of the created VM
+    VMInstance:
+      type: object
+      description: VM instance information including status, IP address, and SSH connection details
+      properties:
+        requestId:
+          type: string
+          description: Request ID (UUID) of the VM instance
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        name:
+          type: string
+          description: Name of the VM instance
+          example: "my-fedora-vm"
+        namespace:
+          type: string
+          description: Kubernetes namespace where the VM is running
+          example: "us-east-1"
+        status:
+          type: string
+          description: Current status of the VM instance
+          example: "Running"
+        ip:
+          type: string
+          description: IP address of the VM instance
+          format: ipv4
+          example: "10.244.0.12"
+        ssh:
+          type: object
+          description: SSH access configuration for the VM
+          properties:
+            enabled:
+              type: boolean
+              description: Whether SSH access is enabled
+              example: true
+            username:
+              type: string
+              description: SSH username for connecting to the VM
+              example: "fedora"
+            secretName:
+              type: string
+              description: Name of the Kubernetes secret containing SSH keys
+              example: "my-fedora-vm-ssh"
+            connectMethods:
+              type: object
+              description: Available methods to connect to the VM via SSH
+              properties:
+                clusterSSH:
+                  type: string
+                  description: SSH command to connect from within the cluster
+                  example: "ssh fedora@10.244.0.12"
+                nodePort:
+                  type: object
+                  description: NodePort configuration for external SSH access
+                  properties:
+                    node:
+                      type: string
+                      description: Node IP address or hostname
+                      example: "192.168.0.10"
+                    port:
+                      type: integer
+                      description: NodePort number for SSH access
+                      example: 32222
+
     Error:
       required:
         - error
