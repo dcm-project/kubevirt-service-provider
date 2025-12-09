@@ -23,10 +23,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	oapimiddleware "github.com/oapi-codegen/nethttp-middleware"
+	"github.com/spf13/pflag"
 	httpSwagger "github.com/swaggo/http-swagger"
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	kubecli "kubevirt.io/client-go/kubecli"
 )
 
 const (
@@ -34,21 +36,33 @@ const (
 )
 
 type Server struct {
-	cfg      *config.Config
-	store    store.Store
-	listener net.Listener
+	cfg        *config.Config
+	store      store.Store
+	listener   net.Listener
+	virtClient kubecli.KubevirtClient
+	//vmStatusSync *service.VMStatusSyncService
 }
 
 // New returns a new instance of a migration-planner server.
+// It initializes the KubeVirt client once and shares it across all services that need it.
 func New(
-	cfg *config.Config,
-	store store.Store,
-	listener net.Listener,
+	cfg *config.Config, store store.Store, listener net.Listener,
 ) *Server {
+	// Create KubeVirt client once - shared by VMService and VMStatusSyncService
+	virtClient, err := kubecli.GetKubevirtClientFromClientConfig(
+		kubecli.DefaultClientConfig(&pflag.FlagSet{}),
+	)
+	if err != nil {
+		zap.S().Fatalw("cannot obtain KubeVirt client", "error", err)
+	}
+
+	//vmStatusSync := service.NewVMStatusSyncService(virtClient, store)
 	return &Server{
-		cfg:      cfg,
-		store:    store,
-		listener: listener,
+		cfg:        cfg,
+		store:      store,
+		listener:   listener,
+		virtClient: virtClient,
+		//vmStatusSync: vmStatusSync,
 	}
 }
 
@@ -58,6 +72,10 @@ func oapiErrorHandler(w http.ResponseWriter, message string, statusCode int) {
 
 func (s *Server) Run(ctx context.Context) error {
 	zap.S().Named("api_server").Info("Initializing API server")
+
+	// Start VM status sync job in background
+	//go s.vmStatusSync.StartSyncJob(ctx)
+
 	swagger, err := api.GetSwagger()
 	if err != nil {
 		return fmt.Errorf("failed to load swagger spec: %w", err)
@@ -92,8 +110,10 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 	})
 
+	// Create VMService with shared KubeVirt client
+	// The client is initialized once at server startup and injected into services
 	h := handlers.NewServiceHandler(
-		service.NewVMService(s.store),
+		service.NewVMService(s.virtClient, s.store),
 	)
 
 	// Apply OpenAPI validation middleware to API routes only

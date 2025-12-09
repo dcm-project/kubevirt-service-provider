@@ -37,48 +37,33 @@ func (s *ServiceHandler) CreateVM(ctx context.Context, request server.CreateVMRe
 		return nil, err
 	}
 
-	logger.Info("Successfully created VM application. ", "VM: ", vm.ID)
-	return server.CreateVM201JSONResponse{Id: &vm.ID, Name: &vm.RequestInfo.VMName, Namespace: &vm.RequestInfo.Namespace}, nil
+	logger.Info("Successfully created VM application. ", "VM: ", vm.Id)
+	return server.CreateVM201JSONResponse(vm), nil
 }
 
-// GetVM (GET /api/v1/vm/{id})
-func (s *ServiceHandler) GetVM(ctx context.Context, request server.GetVMRequestObject) (server.GetVMResponseObject, error) {
-	logger := zap.S().Named("handler")
-	logger.Info("Retrieving provider: ", "ID: ", request)
-
-	return server.GetVM200JSONResponse{}, nil
-}
-
-// GetVM (GET /api/v1/vm)
+// ListVM (GET /api/v1/vm)
 func (s *ServiceHandler) ListVM(ctx context.Context, request server.ListVMRequestObject) (server.ListVMResponseObject, error) {
-	logger := zap.S().Named("handler")
-	logger.Info("Retrieving provider: ", "ID: ", request)
+	logger := zap.S().Named("handler: list-vm")
 
-	return server.ListVM200JSONResponse{}, nil
-}
+	var vms []server.VMInstance
+	var err error
 
-// ApplyVM (PUT /api/v1/vm)
-func (s *ServiceHandler) ApplyVM(ctx context.Context, request server.ApplyVMRequestObject) (server.ApplyVMResponseObject, error) {
-	logger := zap.S().Named("handler")
-	logger.Info("Retrieving provider: ", "ID: ", request)
-
-	return server.ApplyVM201JSONResponse{}, nil
-}
-
-// DeleteVM (DELETE /v1/vm)
-func (s *ServiceHandler) DeleteVM(ctx context.Context, request server.DeleteVMRequestObject) (server.DeleteVMResponseObject, error) {
-	logger := zap.S().Named("service-provider")
-	logger.Info("Deleting Application. ", "VM: ", request)
-
-	appID := &request.Id
-	declaredVM, err := s.vmService.DeleteVMApplication(ctx, appID)
-	if err != nil {
-		logger.Error("Failed to Delete VM application")
-		return nil, err
+	// Check if request ID is provided in the body
+	if request.Params.Id != nil {
+		logger.Infow("Request ID provided, fetching VM from cluster", "id", *request.Params.Id)
+		vms, err = s.vmService.GetVMFromCluster(ctx, request.Params.Id.String())
+	} else {
+		logger.Info("No request ID provided, listing all VMs from database")
+		vms, err = s.vmService.ListVMsFromDatabase(ctx)
 	}
-	logger.Info("Successfully deleted VM application. ", "VM: ", appID)
-	return server.DeleteVM204JSONResponse{
-		Id:        appID,
-		Name:      &declaredVM.RequestInfo.VMName,
-		Namespace: &declaredVM.RequestInfo.Namespace}, nil
+
+	if err != nil {
+		logger.Errorw("Failed to list VMs", "error", err)
+		return server.ListVM500JSONResponse{
+			Error: err.Error(),
+		}, nil
+	}
+
+	logger.Infow("Successfully retrieved VMs", "count", len(vms))
+	return server.ListVM200JSONResponse(vms), nil
 }
