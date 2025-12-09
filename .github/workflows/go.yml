@@ -1,0 +1,51 @@
+---
+name: Go
+on:  # yamllint disable-line rule:truthy
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+
+      - name: Check generated files are up to date
+        run: |
+          make check-generate
+          # The Makefile only checks for uncommitted changes, allowing users to keep untracked files in the repository.
+          # Here, we also check for untracked files, as none are expected at this stage.
+          if [[ $(git ls-files --others --exclude-standard) ]]; then git ls-files --others --exclude-standard; echo "These files are not tracked by git"; exit 1; fi
+
+  check-format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+
+      - name: Check that formatting does not introduce changes
+        run: make check-format
+
+  check-aep-compliance:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+
+      - name: Install Spectral
+        run: npm i @stoplight/spectral-cli -g
+
+      - name: Check that OpenAPI conforms to AEP guidelines
+        run: make check-aep
