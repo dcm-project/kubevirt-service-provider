@@ -34,18 +34,7 @@ paths:
     get:
       summary: List virtual machine applications
       operationId: ListVM
-      description: |
-        List all virtual machine applications. Optionally filter by request ID 
-        by providing it in the request body.
-      parameters:
-        - name: id
-          in: query
-          required: false
-          description: Optional request ID to filter VMs. If not provided, returns all VMs.
-          schema:
-            type: string
-            format: uuid
-            example: "123e4567-e89b-12d3-a456-426614174000"
+      description: List all virtual machine applications
       responses:
         '200':
           description: OK
@@ -70,7 +59,7 @@ paths:
     post:
       summary: Create a VM
       operationId: CreateVM
-      description: Create an vm application
+      description: Create a virtual machine application
       requestBody:
         required: true
         content:
@@ -97,7 +86,69 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-
+  /api/v1/vm/{id}:
+    get:
+      summary: Get virtual machine applications
+      operationId: GetVM
+      description: Get a virtual machine applications.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VMInstance'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete a virtual machine
+      operationId: DeleteVM
+      description: Delete a virtual machine instance
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+            example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '204':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VMInstance'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   schemas:
     VMSpec:
@@ -187,7 +238,7 @@ components:
                   description: |
                     Threads per core (optional).
                     1 = hyperthreading disabled, 2 = enabled.
-                  enum: [1, 2]
+                  enum: [ 1, 2 ]
                   default: 1
 
                 shares:
@@ -300,7 +351,7 @@ components:
                       - thin: Dynamically allocated
                       - thick: Pre-allocated (lazy-zeroed)
                       - thick-eager: Pre-allocated (eager-zeroed)
-                    enum: ["thin", "thick", "thick-eager"]
+                    enum: [ "thin", "thick", "thick-eager" ]
                     default: "thin"
 
                   bus:
@@ -308,7 +359,7 @@ components:
                     description: |
                       Disk bus/controller type (optional).
                       Provider selects optimal default if not specified.
-                    enum: ["virtio", "scsi", "sata", "ide", "nvme"]
+                    enum: [ "virtio", "scsi", "sata", "ide", "nvme" ]
                     example: "virtio"
 
                   storageProfile:
@@ -361,7 +412,7 @@ components:
                       - virtio: Paravirtualized (best performance)
                       - e1000/e1000e: Intel emulation (broad compatibility)
                       - vmxnet3: VMware paravirtualized
-                    enum: ["virtio", "e1000", "e1000e", "vmxnet3", "rtl8139"]
+                    enum: [ "virtio", "e1000", "e1000e", "vmxnet3", "rtl8139" ]
                     default: "virtio"
 
                   network:
@@ -379,7 +430,7 @@ components:
                       mode:
                         type: string
                         description: IP address allocation mode
-                        enum: ["dhcp", "static", "none"]
+                        enum: [ "dhcp", "static", "none" ]
                         default: "dhcp"
 
                       staticIPv4:
@@ -400,7 +451,7 @@ components:
                         items:
                           type: string
                           pattern: "^([0-9]{1,3}\\.){3}[0-9]{1,3}$"
-                        example: ["8.8.8.8", "8.8.4.4"]
+                        example: [ "8.8.8.8", "8.8.4.4" ]
         # ======================================================================
         # Operating System & Firmware
         # Based on: OVF OperatingSystemSection
@@ -437,13 +488,13 @@ components:
               description: |
                 OS family for provider hints (optional).
                 Helps providers select appropriate defaults.
-              enum: ["linux", "windows", "bsd", "other"]
+              enum: [ "linux", "windows", "bsd", "other" ]
               default: "linux"
 
             architecture:
               type: string
               description: CPU architecture
-              enum: ["x86_64", "aarch64", "ppc64le", "s390x", "amd64"]
+              enum: [ "x86_64", "aarch64", "ppc64le", "s390x", "amd64" ]
               default: "x86_64"
 
             firmware:
@@ -452,7 +503,7 @@ components:
                 Firmware type.
                 - bios: Traditional BIOS (broad compatibility)
                 - uefi: UEFI firmware (required for modern OS, Secure Boot)
-              enum: ["bios", "uefi", "uefi-secure-boot"]
+              enum: [ "bios", "uefi", "uefi-secure-boot" ]
               default: "bios"
         # ======================================================================
         # Initialization & Configuration
