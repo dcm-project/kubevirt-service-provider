@@ -49,7 +49,7 @@ func (s *ServiceHandler) ListVM(ctx context.Context, request server.ListVMReques
 	var err error
 
 	// Check if request ID is provided in the body
-	if request.Params.Id != nil && request.Params.Id.String() != "" {
+	if request.Params.Id != nil {
 		logger.Infow("Request ID provided, fetching VM from cluster", "id", *request.Params.Id)
 		vms, err = s.vmService.GetVMFromCluster(ctx, request.Params.Id.String())
 	} else {

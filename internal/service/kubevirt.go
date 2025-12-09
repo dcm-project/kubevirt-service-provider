@@ -145,7 +145,7 @@ func (k *KubeVirtClient) CreateVirtualMachineObject(ctx context.Context, request
 		}
 		allKeys := strings.Join(mergedKeys, "\n")
 
-		sshSecretName := fmt.Sprintf("%sssh-key", virtualMachine.GenerateName)
+		sshSecretName := fmt.Sprintf("%s-ssh-key", &virtualMachine.Name)
 		if err := k.EnsureSSHSecretAndAccessCredentials(ctx, virtualMachine, allKeys, sshSecretName); err != nil {
 			return nil, fmt.Errorf("failed to configure SSH access: %w", err)
 		}
