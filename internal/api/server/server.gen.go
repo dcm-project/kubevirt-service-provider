@@ -826,13 +826,12 @@ type DeleteVMResponseObject interface {
 	VisitDeleteVMResponse(w http.ResponseWriter) error
 }
 
-type DeleteVM204JSONResponse VMInstance
+type DeleteVM204Response struct {
+}
 
-func (response DeleteVM204JSONResponse) VisitDeleteVMResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
+func (response DeleteVM204Response) VisitDeleteVMResponse(w http.ResponseWriter) error {
 	w.WriteHeader(204)
-
-	return json.NewEncoder(w).Encode(response)
+	return nil
 }
 
 type DeleteVM400JSONResponse Error

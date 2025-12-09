@@ -521,7 +521,6 @@ func (r GetVMHealthResponse) StatusCode() int {
 type DeleteVMResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON204      *VMInstance
 	JSON400      *Error
 	JSON500      *Error
 }
@@ -759,13 +758,6 @@ func ParseDeleteVMResponse(rsp *http.Response) (*DeleteVMResponse, error) {
 	}
 
 	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 204:
-		var dest VMInstance
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON204 = &dest
-
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {

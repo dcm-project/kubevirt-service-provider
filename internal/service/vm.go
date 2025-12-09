@@ -162,7 +162,6 @@ func (v *VMService) GetVMFromCluster(ctx context.Context, requestID string) (ser
 	})
 
 	// Convert cluster VM to VMInstance response
-	vms := make([]server.VMInstance, 0, len(vmList.Items))
 	vm := vmList.Items[0]
 	vmInstance := server.VMInstance{
 		RequestId: &vmID,
@@ -194,30 +193,30 @@ func (v *VMService) GetVMFromCluster(ctx context.Context, requestID string) (ser
 	// Populate SSH configuration from cluster
 	v.kubevirt.PopulateSSHConfiguration(ctx, &vmInstance, &vm, requestID, vmiIP, dbApp.OsImage)
 
-	logger.Infow("Found VM(s) with details", "count", len(vms), "requestID", requestID)
+	logger.Infow("Found VM(s) with details", "ID", requestID)
 	return vmInstance, nil
 }
 
 // DeleteVMApplication deletes a VM application from both the cluster and database
 // It removes the VirtualMachine, SSH NodePort service, SSH secrets, and database record
-func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) (mapper.DeclaredVM, error) {
+func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) error {
 	logger := zap.S().Named("vm_service:delete_app")
 	logger.Info("Deleting VM application", "ID", appID)
 
 	if appID == nil || *appID == "" {
-		return mapper.DeclaredVM{}, fmt.Errorf("application ID cannot be empty")
+		return fmt.Errorf("application ID cannot be empty")
 	}
 
 	// Parse the request ID to UUID
 	vmID, err := uuid.Parse(*appID)
 	if err != nil {
-		return mapper.DeclaredVM{}, fmt.Errorf("invalid application ID format: %w", err)
+		return fmt.Errorf("invalid application ID format: %w", err)
 	}
 
 	// Get the VM from database to get namespace and metadata
 	dbApp, err := v.store.Application().Get(ctx, vmID)
 	if err != nil {
-		return mapper.DeclaredVM{}, fmt.Errorf("failed to get VM from database: %w", err)
+		return fmt.Errorf("failed to get VM from database: %w", err)
 	}
 
 	namespace := dbApp.Namespace
@@ -278,28 +277,11 @@ func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) (map
 	// Delete the database record
 	logger.Info("Deleting VM record from database", "requestID", requestID)
 	if err := v.store.Application().Delete(ctx, vmID); err != nil {
-		return mapper.DeclaredVM{}, fmt.Errorf("failed to delete VM from database: %w", err)
+		return fmt.Errorf("failed to delete VM from database: %w", err)
 	}
-
 	logger.Infow("Successfully deleted VM application", "requestID", requestID)
 
-	// Build the response with the deleted VM info
-	request := mapper.Request{
-		RequestId:    requestID,
-		VMName:       dbApp.VMName,
-		Namespace:    dbApp.Namespace,
-		OsImage:      dbApp.OsImage,
-		Ram:          dbApp.Ram,
-		Cpu:          dbApp.Cpu,
-		Architecture: dbApp.Architecture,
-		HostName:     dbApp.HostName,
-	}
-
-	return mapper.DeclaredVM{
-		ID:          requestID,
-		RequestInfo: request,
-		Status:      dbApp.Status,
-	}, nil
+	return nil
 }
 
 // ListVMsFromDatabase retrieves all VMs from the database

@@ -62,7 +62,7 @@ func (s *ServiceHandler) ListVM(ctx context.Context, request server.ListVMReques
 	return server.ListVM200JSONResponse(vms), nil
 }
 
-// (GET /api/v1/vm/{id})
+// GetVM (GET /api/v1/vm/{id})
 func (s *ServiceHandler) GetVM(ctx context.Context, request server.GetVMRequestObject) (server.GetVMResponseObject, error) {
 	logger := zap.S().Named("handler:get-vm")
 	// Check if request ID is provided in the body
@@ -81,12 +81,12 @@ func (s *ServiceHandler) GetVM(ctx context.Context, request server.GetVMRequestO
 	return server.GetVM200JSONResponse(vmInstance), nil
 }
 
-// (DELETE /api/v1/vm/{id})
+// DeleteVM (DELETE /api/v1/vm/{id})
 func (s *ServiceHandler) DeleteVM(ctx context.Context, request server.DeleteVMRequestObject) (server.DeleteVMResponseObject, error) {
 	logger := zap.S().Named("handler:delete-vm")
 	vmId := request.Id.String()
 	logger.Infow("Request ID provided, deleting VM from cluster", "id", vmId)
-	_, err := s.vmService.DeleteVMApplication(ctx, &vmId)
+	err := s.vmService.DeleteVMApplication(ctx, &vmId)
 
 	if err != nil {
 		logger.Errorw("Failed to delete VM", "error", err)
@@ -94,5 +94,5 @@ func (s *ServiceHandler) DeleteVM(ctx context.Context, request server.DeleteVMRe
 			Error: err.Error(),
 		}, nil
 	}
-	return server.DeleteVM204JSONResponse{}, nil
+	return server.DeleteVM204Response{}, nil
 }

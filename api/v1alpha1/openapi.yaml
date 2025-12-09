@@ -132,11 +132,7 @@ paths:
             example: "123e4567-e89b-12d3-a456-426614174000"
       responses:
         '204':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/VMInstance'
+          description: No Content
         '400':
           description: Bad request
           content:
