@@ -5,11 +5,13 @@ import (
 	"fmt"
 
 	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
+	"github.com/dcm-project/kubevirt-service-provider/internal/service/kubevirt"
 	"github.com/dcm-project/kubevirt-service-provider/internal/service/mapper"
 	"github.com/dcm-project/kubevirt-service-provider/internal/store"
 	"github.com/dcm-project/kubevirt-service-provider/internal/store/model"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"kubevirt.io/client-go/kubecli"
 )
@@ -18,7 +20,7 @@ import (
 // It coordinates between the database store and KubeVirt cluster operations
 type VMService struct {
 	kubevirtClient kubecli.KubevirtClient
-	kubevirt       *KubeVirtClient
+	kubevirt       *kubevirt.Client
 	store          store.Store
 }
 
@@ -27,7 +29,7 @@ type VMService struct {
 func NewVMService(kubevirtClient kubecli.KubevirtClient, store store.Store) *VMService {
 	return &VMService{
 		kubevirtClient: kubevirtClient,
-		kubevirt:       NewKubeVirtClient(kubevirtClient),
+		kubevirt:       kubevirt.NewClient(kubevirtClient),
 		store:          store,
 	}
 }
@@ -64,7 +66,7 @@ func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSO
 
 	// Build request from API payload
 	request := mapper.Request{
-		OsImage:      v.getOSImage(userRequest.GuestOS.Type),
+		OsImage:      kubevirt.GetOSImage(userRequest.GuestOS.Type),
 		Ram:          userRequest.Compute.Memory.SizeGB,
 		Cpu:          userRequest.Compute.Vcpu.Count,
 		Architecture: string(*userRequest.GuestOS.Architecture),
@@ -78,7 +80,7 @@ func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSO
 	}
 
 	// Generate cloud-init user data
-	cloudInitUserData := v.generateCloudInitUserData(request.VMName, &request)
+	cloudInitUserData := kubevirt.GenerateCloudInitUserData(request.VMName, &request)
 
 	// Create VirtualMachine object
 	logger.Info("Creating VirtualMachine object")
@@ -114,20 +116,20 @@ func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSO
 
 // GetVMFromCluster retrieves a VM from the cluster by request ID and returns detailed VMInstance information
 // It queries both the database and cluster to provide comprehensive VM details including status, IP, and SSH configuration
-func (v *VMService) GetVMFromCluster(ctx context.Context, requestID string) ([]server.VMInstance, error) {
+func (v *VMService) GetVMFromCluster(ctx context.Context, requestID string) (server.VMInstance, error) {
 	logger := zap.S().Named("vm_service:get_vm_from_cluster")
 	logger.Infow("Getting VM from cluster", "requestID", requestID)
 
 	// Parse the request ID to UUID
 	vmID, err := uuid.Parse(requestID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid request ID format: %w", err)
+		return server.VMInstance{}, fmt.Errorf("invalid request ID format: %w", err)
 	}
 
 	// Get the VM from database to get namespace and metadata
 	dbApp, err := v.store.Application().Get(ctx, vmID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get VM from database: %w", err)
+		return server.VMInstance{}, fmt.Errorf("failed to get VM from database: %w", err)
 	}
 	namespace := dbApp.Namespace
 
@@ -136,7 +138,7 @@ func (v *VMService) GetVMFromCluster(ctx context.Context, requestID string) ([]s
 		LabelSelector: fmt.Sprintf("app-id=%s", requestID),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list VMs in namespace %s: %w", namespace, err)
+		return server.VMInstance{}, fmt.Errorf("failed to list VMs in namespace %s: %w", namespace, err)
 	}
 
 	// If VM not found in cluster, return database record
@@ -144,15 +146,13 @@ func (v *VMService) GetVMFromCluster(ctx context.Context, requestID string) ([]s
 		logger.Warnw("No VM found in cluster with request ID", "requestID", requestID, "namespace", namespace)
 		idUuidFmt, err := uuid.Parse(requestID)
 		if err != nil {
-			return nil, fmt.Errorf("invalid request ID format: %w", err)
+			return server.VMInstance{}, fmt.Errorf("invalid request ID format: %w", err)
 		}
-		return []server.VMInstance{
-			{
-				RequestId: &idUuidFmt,
-				Name:      &dbApp.VMName,
-				Namespace: &dbApp.Namespace,
-				Status:    &dbApp.Status,
-			},
+		return server.VMInstance{
+			RequestId: &idUuidFmt,
+			Name:      &dbApp.VMName,
+			Namespace: &dbApp.Namespace,
+			Status:    &dbApp.Status,
 		}, nil
 	}
 
@@ -162,54 +162,126 @@ func (v *VMService) GetVMFromCluster(ctx context.Context, requestID string) ([]s
 	})
 
 	// Convert cluster VM to VMInstance response
-	vms := make([]server.VMInstance, 0, len(vmList.Items))
-	for _, vm := range vmList.Items {
-		vmInstance := server.VMInstance{
-			RequestId: &vmID,
-			Name:      &dbApp.VMName,
-			Namespace: &namespace,
-		}
-
-		// Get VMI status and IP
-		var vmiIP string
-		var vmiStatus string
-		if err == nil && len(vmiList.Items) > 0 {
-			vmi := vmiList.Items[0]
-			vmiStatus = string(vmi.Status.Phase)
-
-			// Get IP from VMI interfaces
-			if len(vmi.Status.Interfaces) > 0 {
-				vmiIP = vmi.Status.Interfaces[0].IP
-			}
-		} else {
-			// Fallback to database status if VMI not found
-			vmiStatus = dbApp.Status
-		}
-
-		vmInstance.Status = &vmiStatus
-		if vmiIP != "" {
-			vmInstance.Ip = &vmiIP
-		}
-
-		// Populate SSH configuration from cluster
-		v.kubevirt.PopulateSSHConfiguration(ctx, &vmInstance, &vm, requestID, vmiIP, dbApp.OsImage)
-
-		vms = append(vms, vmInstance)
+	vm := vmList.Items[0]
+	vmInstance := server.VMInstance{
+		RequestId: &vmID,
+		Name:      &dbApp.VMName,
+		Namespace: &namespace,
 	}
 
-	logger.Infow("Found VM(s) with details", "count", len(vms), "requestID", requestID)
-	return vms, nil
+	// Get VMI status and IP
+	var vmiIP string
+	var vmiStatus string
+	if err == nil && len(vmiList.Items) > 0 {
+		vmi := vmiList.Items[0]
+		vmiStatus = string(vmi.Status.Phase)
+
+		// Get IP from VMI interfaces
+		if len(vmi.Status.Interfaces) > 0 {
+			vmiIP = vmi.Status.Interfaces[0].IP
+		}
+	} else {
+		// Fallback to database status if VMI not found
+		vmiStatus = dbApp.Status
+	}
+
+	vmInstance.Status = &vmiStatus
+	if vmiIP != "" {
+		vmInstance.Ip = &vmiIP
+	}
+
+	// Populate SSH configuration from cluster
+	v.kubevirt.PopulateSSHConfiguration(ctx, &vmInstance, &vm, requestID, vmiIP, dbApp.OsImage)
+
+	logger.Infow("Found VM(s) with details", "ID", requestID)
+	return vmInstance, nil
 }
 
 // DeleteVMApplication deletes a VM application from both the cluster and database
-func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) (mapper.DeclaredVM, error) {
+// It removes the VirtualMachine, SSH NodePort service, SSH secrets, and database record
+func (v *VMService) DeleteVMApplication(ctx context.Context, appID *string) error {
 	logger := zap.S().Named("vm_service:delete_app")
 	logger.Info("Deleting VM application", "ID", appID)
 
-	// TODO: Implement VM deletion from cluster
-	// TODO: Implement database record deletion
+	if appID == nil || *appID == "" {
+		return fmt.Errorf("application ID cannot be empty")
+	}
 
-	return mapper.DeclaredVM{}, nil
+	// Parse the request ID to UUID
+	vmID, err := uuid.Parse(*appID)
+	if err != nil {
+		return fmt.Errorf("invalid application ID format: %w", err)
+	}
+
+	// Get the VM from database to get namespace and metadata
+	dbApp, err := v.store.Application().Get(ctx, vmID)
+	if err != nil {
+		return fmt.Errorf("failed to get VM from database: %w", err)
+	}
+
+	namespace := dbApp.Namespace
+	requestID := *appID
+
+	// Find the VM in the cluster using app-id label
+	vmList, err := v.kubevirtClient.VirtualMachine(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("app-id=%s", requestID),
+	})
+	if err != nil {
+		logger.Warnw("Failed to list VMs in cluster, proceeding with cleanup", "error", err)
+	} else if len(vmList.Items) > 0 {
+		vm := &vmList.Items[0]
+
+		// Delete the VirtualMachine from cluster
+		logger.Infow("Deleting VirtualMachine from cluster", "vmName", vm.Name, "namespace", namespace)
+		err = v.kubevirtClient.VirtualMachine(namespace).Delete(ctx, vm.Name, metav1.DeleteOptions{})
+		if err != nil && !apierrors.IsNotFound(err) {
+			logger.Warnw("Failed to delete VirtualMachine from cluster", "vmName", vm.Name, "error", err)
+			// Continue with cleanup even if VM deletion fails
+		} else {
+			logger.Infow("Successfully deleted VirtualMachine", "vmName", vm.Name)
+		}
+
+		// Delete SSH NodePort service if it exists
+		serviceName := fmt.Sprintf("%s-ssh", vm.Name)
+		if serviceName == "-ssh" {
+			serviceName = fmt.Sprintf("%s-ssh", requestID)
+		}
+		if err := v.kubevirt.DeleteSSHNodePortService(ctx, namespace, serviceName); err != nil {
+			logger.Warnw("Failed to delete SSH NodePort service", "service", serviceName, "error", err)
+			// Continue with cleanup even if service deletion fails
+		}
+
+		// Delete SSH secret if it exists
+		// Try to get secret name from VM spec first, fallback to constructed name
+		var sshSecretName string
+		if vm.Spec.Template != nil && len(vm.Spec.Template.Spec.AccessCredentials) > 0 {
+			for _, cred := range vm.Spec.Template.Spec.AccessCredentials {
+				if cred.SSHPublicKey != nil && cred.SSHPublicKey.Source.Secret != nil {
+					sshSecretName = cred.SSHPublicKey.Source.Secret.SecretName
+					break
+				}
+			}
+		}
+		// Fallback to constructed name if not found in spec
+		if sshSecretName == "" {
+			sshSecretName = fmt.Sprintf("%s-ssh-key", vm.Name)
+		}
+		if err := v.kubevirt.DeleteSSHSecret(ctx, namespace, sshSecretName); err != nil {
+			logger.Warnw("Failed to delete SSH secret", "secret", sshSecretName, "error", err)
+			// Continue with cleanup even if secret deletion fails
+		}
+	} else {
+		logger.Warnw("VM not found in cluster, proceeding with database cleanup", "requestID", requestID)
+	}
+
+	// Delete the database record
+	logger.Info("Deleting VM record from database", "requestID", requestID)
+	if err := v.store.Application().Delete(ctx, vmID); err != nil {
+		return fmt.Errorf("failed to delete VM from database: %w", err)
+	}
+	logger.Infow("Successfully deleted VM application", "requestID", requestID)
+
+	return nil
 }
 
 // ListVMsFromDatabase retrieves all VMs from the database
@@ -264,30 +336,4 @@ func (v *VMService) saveToStore(ctx context.Context, request mapper.Request) (mo
 	}
 
 	return dbApp, nil
-}
-
-// generateCloudInitUserData generates cloud-init user data for VM initialization
-func (v *VMService) generateCloudInitUserData(hostname string, vm *mapper.Request) string {
-	return fmt.Sprintf(`#cloud-config
-user: %s
-password: auto-generated-pass
-chpasswd: { expire: False }
-hostname: %s
-`, vm.OsImage, hostname)
-}
-
-// getOSImage returns the container image for the specified OS type
-func (v *VMService) getOSImage(os string) string {
-	images := map[string]string{
-		"fedora": "quay.io/containerdisks/fedora:latest",
-		"ubuntu": "quay.io/containerdisks/ubuntu:latest",
-		"centos": "quay.io/containerdisks/centos:latest",
-		"rhel":   "quay.io/containerdisks/rhel:latest",
-	}
-
-	if image, exists := images[os]; exists {
-		return image
-	}
-	// Default to fedora if OS not found
-	return "quay.io/containerdisks/fedora:latest"
 }

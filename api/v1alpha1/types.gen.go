@@ -405,11 +405,5 @@ type VMSpecStorageDisksBus string
 // - thick-eager: Pre-allocated (eager-zeroed)
 type VMSpecStorageDisksFormat string
 
-// ListVMParams defines parameters for ListVM.
-type ListVMParams struct {
-	// Id Optional request ID to filter VMs. If not provided, returns all VMs.
-	Id *openapi_types.UUID `form:"id,omitempty" json:"id,omitempty"`
-}
-
 // CreateVMJSONRequestBody defines body for CreateVM for application/json ContentType.
 type CreateVMJSONRequestBody = VMSpec
