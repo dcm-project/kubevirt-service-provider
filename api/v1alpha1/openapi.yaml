@@ -69,7 +69,7 @@ paths:
           required: false
           schema:
             type: string
-        - name: id
+        - name: request_id
           in: query
           description: Filter by request ID (UUID)
           required: false
