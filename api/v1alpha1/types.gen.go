@@ -76,6 +76,9 @@ type Error struct {
 
 	// Error Error message
 	Error string `json:"error"`
+
+	// Type Error type identifier
+	Type *string `json:"type,omitempty"`
 }
 
 // VM defines model for VM.
@@ -91,6 +94,9 @@ type VM struct {
 
 	// Namespace Namespace of the VM
 	Namespace *string `json:"namespace,omitempty"`
+
+	// Path Resource path for this VM
+	Path *string `json:"path,omitempty"`
 }
 
 // VMInstance VM instance information including status, IP address, and SSH connection details
@@ -103,6 +109,9 @@ type VMInstance struct {
 
 	// Namespace Kubernetes namespace where the VM is running
 	Namespace *string `json:"namespace,omitempty"`
+
+	// Path Resource path for this VM instance
+	Path *string `json:"path,omitempty"`
 
 	// RequestId Request ID (UUID) of the VM instance
 	RequestId *openapi_types.UUID `json:"requestId,omitempty"`
@@ -305,6 +314,9 @@ type VMSpec struct {
 		} `json:"interfaces,omitempty"`
 	} `json:"network,omitempty"`
 
+	// Path Resource path for this VM specification
+	Path *string `json:"path,omitempty"`
+
 	// ProviderHints Optional provider-specific configuration hints.
 	//
 	// Allows providers to optimize resource provisioning while keeping
@@ -405,5 +417,23 @@ type VMSpecStorageDisksBus string
 // - thick-eager: Pre-allocated (eager-zeroed)
 type VMSpecStorageDisksFormat string
 
-// CreateVMJSONRequestBody defines body for CreateVM for application/json ContentType.
-type CreateVMJSONRequestBody = VMSpec
+// ListVmsParams defines parameters for ListVms.
+type ListVmsParams struct {
+	// MaxPageSize Maximum number of results to return per page
+	MaxPageSize *int `form:"max_page_size,omitempty" json:"max_page_size,omitempty"`
+
+	// PageToken Token for pagination
+	PageToken *string `form:"page_token,omitempty" json:"page_token,omitempty"`
+
+	// Id Filter by request ID (UUID)
+	Id *openapi_types.UUID `form:"id,omitempty" json:"id,omitempty"`
+}
+
+// CreateVmParams defines parameters for CreateVm.
+type CreateVmParams struct {
+	// Id Optional request ID (UUID). If not provided, one will be generated.
+	Id *openapi_types.UUID `form:"id,omitempty" json:"id,omitempty"`
+}
+
+// CreateVmJSONRequestBody defines body for CreateVm for application/json ContentType.
+type CreateVmJSONRequestBody = VMSpec

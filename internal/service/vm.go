@@ -43,7 +43,7 @@ const (
 
 // CreateVM creates a new virtual machine in the cluster and stores its metadata in the database
 // It handles VM creation, SSH configuration, NodePort service creation, and database persistence
-func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVMJSONRequestBody) (server.VM, error) {
+func (v *VMService) CreateVM(ctx context.Context, userRequest server.CreateVmJSONRequestBody) (server.VM, error) {
 	logger := zap.S().Named("vm_service:create_vm")
 
 	// Extract application name from metadata
