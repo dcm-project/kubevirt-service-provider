@@ -11,39 +11,88 @@ info:
 servers:
   - url: /
 
+tags:
+  - name: health
+    description: Health check endpoints
+
 paths:
   /health:
     get:
       summary: Health check
-      operationId: ListHealth
+      operationId: listHealth
       description: Health check for KubeVirt Service Provider API
+      tags:
+        - health
       responses:
         '200':
           description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "ok"
 
   /api/v1/vm/health:
     get:
       summary: Health check
-      operationId: GetVMHealth
+      operationId: listVmHealth
       description: Health check for VM service type
+      tags:
+        - health
       responses:
         '200':
           description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "ok"
 
   /api/v1/vm:
     get:
       summary: List virtual machine applications
-      operationId: ListVM
+      operationId: listVms
       description: List all virtual machine applications
+      parameters:
+        - name: max_page_size
+          in: query
+          description: Maximum number of results to return per page
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - name: page_token
+          in: query
+          description: Token for pagination
+          required: false
+          schema:
+            type: string
+        - name: request_id
+          in: query
+          description: Filter by request ID (UUID)
+          required: false
+          schema:
+            type: string
+            format: uuid
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/VMInstance'
+                type: object
+                required:
+                  - vms
+                properties:
+                  vms:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VMInstance'
+                  next_page_token:
+                    type: string
+                    description: Token for the next page of results
         '400':
           description: Bad request
           content:
@@ -58,8 +107,16 @@ paths:
                 $ref: '#/components/schemas/Error'
     post:
       summary: Create a VM
-      operationId: CreateVM
+      operationId: createVm
       description: Create a virtual machine application
+      parameters:
+        - name: id
+          in: query
+          description: Optional request ID (UUID). If not provided, one will be generated.
+          required: false
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
@@ -86,13 +143,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/v1/vm/{id}:
+  /api/v1/vm/{vmId}:
     get:
       summary: Get virtual machine applications
-      operationId: GetVM
+      operationId: getVm
       description: Get a virtual machine applications.
       parameters:
-        - name: id
+        - name: vmId
           in: path
           required: true
           schema:
@@ -120,10 +177,10 @@ paths:
                 $ref: '#/components/schemas/Error'
     delete:
       summary: Delete a virtual machine
-      operationId: DeleteVM
+      operationId: deleteVm
       description: Delete a virtual machine instance
       parameters:
-        - name: id
+        - name: vmId
           in: path
           required: true
           schema:
@@ -148,6 +205,7 @@ paths:
 components:
   schemas:
     VMSpec:
+      x-aep-resource: true
       type: object
       description: |
         Provider-agnostic virtual machine specification.
@@ -163,6 +221,10 @@ components:
         CatalogItem that references this schema can define its own validation
         rules, allowing different catalog items to have different requirements.
       properties:
+        path:
+          type: string
+          description: Resource path for this VM specification
+          example: "/api/v1/vm"
         # ======================================================================
         # Schema Version
         # ======================================================================
@@ -622,6 +684,10 @@ components:
       type: object
       x-aep-resource: true
       properties:
+        path:
+          type: string
+          description: Resource path for this VM
+          example: "/api/v1/vm/123e4567-e89b-12d3-a456-426614174000"
         id:
           type: string
           description: ID of the VM
@@ -638,8 +704,13 @@ components:
           description: The status of the created VM
     VMInstance:
       type: object
+      x-aep-resource: true
       description: VM instance information including status, IP address, and SSH connection details
       properties:
+        path:
+          type: string
+          description: Resource path for this VM instance
+          example: "/api/v1/vm/123e4567-e89b-12d3-a456-426614174000"
         requestId:
           type: string
           description: Request ID (UUID) of the VM instance
@@ -704,6 +775,11 @@ components:
         - error
       type: object
       properties:
+        type:
+          type: string
+          description: Error type identifier
+          format: uri-reference
+          example: "https://example.com/errors/invalid-argument"
         error:
           type: string
           description: Error message

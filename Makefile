@@ -1,4 +1,4 @@
-.PHONY: build run test clean fmt vet generate check-generate help 
+.PHONY: build run test clean fmt vet generate check-generate check-aep help 
 
 # Go binary path
 GOBIN := $(shell go env GOPATH)/bin
@@ -8,8 +8,8 @@ build:
 	go build -o bin/kubevirt-service-provider ./cmd/kubevirt-service-provider
 
 # Check AEP compliance
-aep:
-	spectral lint .spectral.yaml ./api/v1alpha1/openapi.yaml
+check-aep:
+	spectral lint -r .spectral.yaml ./api/v1alpha1/openapi.yaml
 
 # Run the application
 run:
@@ -101,6 +101,7 @@ help:
 	@echo "  vet             - Vet code"
 	@echo "  tidy            - Tidy dependencies"
 	@echo "  check           - Run all checks (fmt, vet, test)"
+	@echo "  check-aep       - Check AEP compliance of OpenAPI spec"
 	@echo "  dev             - Build and run"
 	@echo "  generate        - Generate code from OpenAPI specification"
 	@echo "  help            - Show this help"

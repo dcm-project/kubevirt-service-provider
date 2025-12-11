@@ -91,29 +91,29 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
-	// ListVM request
-	ListVM(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// ListVms request
+	ListVms(ctx context.Context, params *ListVmsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateVMWithBody request with any body
-	CreateVMWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// CreateVmWithBody request with any body
+	CreateVmWithBody(ctx context.Context, params *CreateVmParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateVM(ctx context.Context, body CreateVMJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	CreateVm(ctx context.Context, params *CreateVmParams, body CreateVmJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetVMHealth request
-	GetVMHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// ListVmHealth request
+	ListVmHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteVM request
-	DeleteVM(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// DeleteVm request
+	DeleteVm(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetVM request
-	GetVM(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetVm request
+	GetVm(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListHealth request
 	ListHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-func (c *Client) ListVM(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListVMRequest(c.Server)
+func (c *Client) ListVms(ctx context.Context, params *ListVmsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListVmsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +124,8 @@ func (c *Client) ListVM(ctx context.Context, reqEditors ...RequestEditorFn) (*ht
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateVMWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateVMRequestWithBody(c.Server, contentType, body)
+func (c *Client) CreateVmWithBody(ctx context.Context, params *CreateVmParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateVmRequestWithBody(c.Server, params, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +136,8 @@ func (c *Client) CreateVMWithBody(ctx context.Context, contentType string, body 
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateVM(ctx context.Context, body CreateVMJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateVMRequest(c.Server, body)
+func (c *Client) CreateVm(ctx context.Context, params *CreateVmParams, body CreateVmJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateVmRequest(c.Server, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -148,8 +148,8 @@ func (c *Client) CreateVM(ctx context.Context, body CreateVMJSONRequestBody, req
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetVMHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetVMHealthRequest(c.Server)
+func (c *Client) ListVmHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListVmHealthRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -160,8 +160,8 @@ func (c *Client) GetVMHealth(ctx context.Context, reqEditors ...RequestEditorFn)
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteVM(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteVMRequest(c.Server, id)
+func (c *Client) DeleteVm(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteVmRequest(c.Server, vmId)
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +172,8 @@ func (c *Client) DeleteVM(ctx context.Context, id openapi_types.UUID, reqEditors
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetVM(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetVMRequest(c.Server, id)
+func (c *Client) GetVm(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVmRequest(c.Server, vmId)
 	if err != nil {
 		return nil, err
 	}
@@ -196,8 +196,8 @@ func (c *Client) ListHealth(ctx context.Context, reqEditors ...RequestEditorFn) 
 	return c.Client.Do(req)
 }
 
-// NewListVMRequest generates requests for ListVM
-func NewListVMRequest(server string) (*http.Request, error) {
+// NewListVmsRequest generates requests for ListVms
+func NewListVmsRequest(server string, params *ListVmsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -213,6 +213,60 @@ func NewListVMRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.MaxPageSize != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "max_page_size", runtime.ParamLocationQuery, *params.MaxPageSize); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.PageToken != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "page_token", runtime.ParamLocationQuery, *params.PageToken); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Id != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "id", runtime.ParamLocationQuery, *params.Id); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -223,19 +277,19 @@ func NewListVMRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewCreateVMRequest calls the generic CreateVM builder with application/json body
-func NewCreateVMRequest(server string, body CreateVMJSONRequestBody) (*http.Request, error) {
+// NewCreateVmRequest calls the generic CreateVm builder with application/json body
+func NewCreateVmRequest(server string, params *CreateVmParams, body CreateVmJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateVMRequestWithBody(server, "application/json", bodyReader)
+	return NewCreateVmRequestWithBody(server, params, "application/json", bodyReader)
 }
 
-// NewCreateVMRequestWithBody generates requests for CreateVM with any type of body
-func NewCreateVMRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+// NewCreateVmRequestWithBody generates requests for CreateVm with any type of body
+func NewCreateVmRequestWithBody(server string, params *CreateVmParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -251,6 +305,28 @@ func NewCreateVMRequestWithBody(server string, contentType string, body io.Reade
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Id != nil {
+
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "id", runtime.ParamLocationQuery, *params.Id); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("POST", queryURL.String(), body)
@@ -263,8 +339,8 @@ func NewCreateVMRequestWithBody(server string, contentType string, body io.Reade
 	return req, nil
 }
 
-// NewGetVMHealthRequest generates requests for GetVMHealth
-func NewGetVMHealthRequest(server string) (*http.Request, error) {
+// NewListVmHealthRequest generates requests for ListVmHealth
+func NewListVmHealthRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -290,13 +366,13 @@ func NewGetVMHealthRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewDeleteVMRequest generates requests for DeleteVM
-func NewDeleteVMRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+// NewDeleteVmRequest generates requests for DeleteVm
+func NewDeleteVmRequest(server string, vmId openapi_types.UUID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "vmId", runtime.ParamLocationPath, vmId)
 	if err != nil {
 		return nil, err
 	}
@@ -324,13 +400,13 @@ func NewDeleteVMRequest(server string, id openapi_types.UUID) (*http.Request, er
 	return req, nil
 }
 
-// NewGetVMRequest generates requests for GetVM
-func NewGetVMRequest(server string, id openapi_types.UUID) (*http.Request, error) {
+// NewGetVmRequest generates requests for GetVm
+func NewGetVmRequest(server string, vmId openapi_types.UUID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "id", runtime.ParamLocationPath, id)
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "vmId", runtime.ParamLocationPath, vmId)
 	if err != nil {
 		return nil, err
 	}
@@ -428,37 +504,41 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
-	// ListVMWithResponse request
-	ListVMWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListVMResponse, error)
+	// ListVmsWithResponse request
+	ListVmsWithResponse(ctx context.Context, params *ListVmsParams, reqEditors ...RequestEditorFn) (*ListVmsResponse, error)
 
-	// CreateVMWithBodyWithResponse request with any body
-	CreateVMWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateVMResponse, error)
+	// CreateVmWithBodyWithResponse request with any body
+	CreateVmWithBodyWithResponse(ctx context.Context, params *CreateVmParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateVmResponse, error)
 
-	CreateVMWithResponse(ctx context.Context, body CreateVMJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateVMResponse, error)
+	CreateVmWithResponse(ctx context.Context, params *CreateVmParams, body CreateVmJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateVmResponse, error)
 
-	// GetVMHealthWithResponse request
-	GetVMHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVMHealthResponse, error)
+	// ListVmHealthWithResponse request
+	ListVmHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListVmHealthResponse, error)
 
-	// DeleteVMWithResponse request
-	DeleteVMWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteVMResponse, error)
+	// DeleteVmWithResponse request
+	DeleteVmWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteVmResponse, error)
 
-	// GetVMWithResponse request
-	GetVMWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetVMResponse, error)
+	// GetVmWithResponse request
+	GetVmWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetVmResponse, error)
 
 	// ListHealthWithResponse request
 	ListHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListHealthResponse, error)
 }
 
-type ListVMResponse struct {
+type ListVmsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *[]VMInstance
-	JSON400      *Error
-	JSON500      *Error
+	JSON200      *struct {
+		// NextPageToken Token for the next page of results
+		NextPageToken *string      `json:"next_page_token,omitempty"`
+		Vms           []VMInstance `json:"vms"`
+	}
+	JSON400 *Error
+	JSON500 *Error
 }
 
 // Status returns HTTPResponse.Status
-func (r ListVMResponse) Status() string {
+func (r ListVmsResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -466,14 +546,14 @@ func (r ListVMResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r ListVMResponse) StatusCode() int {
+func (r ListVmsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type CreateVMResponse struct {
+type CreateVmResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON201      *VM
@@ -482,7 +562,7 @@ type CreateVMResponse struct {
 }
 
 // Status returns HTTPResponse.Status
-func (r CreateVMResponse) Status() string {
+func (r CreateVmResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -490,20 +570,20 @@ func (r CreateVMResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r CreateVMResponse) StatusCode() int {
+func (r CreateVmResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type GetVMHealthResponse struct {
+type ListVmHealthResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 }
 
 // Status returns HTTPResponse.Status
-func (r GetVMHealthResponse) Status() string {
+func (r ListVmHealthResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -511,14 +591,14 @@ func (r GetVMHealthResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetVMHealthResponse) StatusCode() int {
+func (r ListVmHealthResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type DeleteVMResponse struct {
+type DeleteVmResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON400      *Error
@@ -526,7 +606,7 @@ type DeleteVMResponse struct {
 }
 
 // Status returns HTTPResponse.Status
-func (r DeleteVMResponse) Status() string {
+func (r DeleteVmResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -534,14 +614,14 @@ func (r DeleteVMResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r DeleteVMResponse) StatusCode() int {
+func (r DeleteVmResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type GetVMResponse struct {
+type GetVmResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *VMInstance
@@ -550,7 +630,7 @@ type GetVMResponse struct {
 }
 
 // Status returns HTTPResponse.Status
-func (r GetVMResponse) Status() string {
+func (r GetVmResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -558,7 +638,7 @@ func (r GetVMResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetVMResponse) StatusCode() int {
+func (r GetVmResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -586,57 +666,57 @@ func (r ListHealthResponse) StatusCode() int {
 	return 0
 }
 
-// ListVMWithResponse request returning *ListVMResponse
-func (c *ClientWithResponses) ListVMWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListVMResponse, error) {
-	rsp, err := c.ListVM(ctx, reqEditors...)
+// ListVmsWithResponse request returning *ListVmsResponse
+func (c *ClientWithResponses) ListVmsWithResponse(ctx context.Context, params *ListVmsParams, reqEditors ...RequestEditorFn) (*ListVmsResponse, error) {
+	rsp, err := c.ListVms(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseListVMResponse(rsp)
+	return ParseListVmsResponse(rsp)
 }
 
-// CreateVMWithBodyWithResponse request with arbitrary body returning *CreateVMResponse
-func (c *ClientWithResponses) CreateVMWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateVMResponse, error) {
-	rsp, err := c.CreateVMWithBody(ctx, contentType, body, reqEditors...)
+// CreateVmWithBodyWithResponse request with arbitrary body returning *CreateVmResponse
+func (c *ClientWithResponses) CreateVmWithBodyWithResponse(ctx context.Context, params *CreateVmParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateVmResponse, error) {
+	rsp, err := c.CreateVmWithBody(ctx, params, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseCreateVMResponse(rsp)
+	return ParseCreateVmResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateVMWithResponse(ctx context.Context, body CreateVMJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateVMResponse, error) {
-	rsp, err := c.CreateVM(ctx, body, reqEditors...)
+func (c *ClientWithResponses) CreateVmWithResponse(ctx context.Context, params *CreateVmParams, body CreateVmJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateVmResponse, error) {
+	rsp, err := c.CreateVm(ctx, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseCreateVMResponse(rsp)
+	return ParseCreateVmResponse(rsp)
 }
 
-// GetVMHealthWithResponse request returning *GetVMHealthResponse
-func (c *ClientWithResponses) GetVMHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetVMHealthResponse, error) {
-	rsp, err := c.GetVMHealth(ctx, reqEditors...)
+// ListVmHealthWithResponse request returning *ListVmHealthResponse
+func (c *ClientWithResponses) ListVmHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListVmHealthResponse, error) {
+	rsp, err := c.ListVmHealth(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetVMHealthResponse(rsp)
+	return ParseListVmHealthResponse(rsp)
 }
 
-// DeleteVMWithResponse request returning *DeleteVMResponse
-func (c *ClientWithResponses) DeleteVMWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteVMResponse, error) {
-	rsp, err := c.DeleteVM(ctx, id, reqEditors...)
+// DeleteVmWithResponse request returning *DeleteVmResponse
+func (c *ClientWithResponses) DeleteVmWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteVmResponse, error) {
+	rsp, err := c.DeleteVm(ctx, vmId, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseDeleteVMResponse(rsp)
+	return ParseDeleteVmResponse(rsp)
 }
 
-// GetVMWithResponse request returning *GetVMResponse
-func (c *ClientWithResponses) GetVMWithResponse(ctx context.Context, id openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetVMResponse, error) {
-	rsp, err := c.GetVM(ctx, id, reqEditors...)
+// GetVmWithResponse request returning *GetVmResponse
+func (c *ClientWithResponses) GetVmWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetVmResponse, error) {
+	rsp, err := c.GetVm(ctx, vmId, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetVMResponse(rsp)
+	return ParseGetVmResponse(rsp)
 }
 
 // ListHealthWithResponse request returning *ListHealthResponse
@@ -648,22 +728,26 @@ func (c *ClientWithResponses) ListHealthWithResponse(ctx context.Context, reqEdi
 	return ParseListHealthResponse(rsp)
 }
 
-// ParseListVMResponse parses an HTTP response from a ListVMWithResponse call
-func ParseListVMResponse(rsp *http.Response) (*ListVMResponse, error) {
+// ParseListVmsResponse parses an HTTP response from a ListVmsWithResponse call
+func ParseListVmsResponse(rsp *http.Response) (*ListVmsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &ListVMResponse{
+	response := &ListVmsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []VMInstance
+		var dest struct {
+			// NextPageToken Token for the next page of results
+			NextPageToken *string      `json:"next_page_token,omitempty"`
+			Vms           []VMInstance `json:"vms"`
+		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -688,15 +772,15 @@ func ParseListVMResponse(rsp *http.Response) (*ListVMResponse, error) {
 	return response, nil
 }
 
-// ParseCreateVMResponse parses an HTTP response from a CreateVMWithResponse call
-func ParseCreateVMResponse(rsp *http.Response) (*CreateVMResponse, error) {
+// ParseCreateVmResponse parses an HTTP response from a CreateVmWithResponse call
+func ParseCreateVmResponse(rsp *http.Response) (*CreateVmResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &CreateVMResponse{
+	response := &CreateVmResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -728,15 +812,15 @@ func ParseCreateVMResponse(rsp *http.Response) (*CreateVMResponse, error) {
 	return response, nil
 }
 
-// ParseGetVMHealthResponse parses an HTTP response from a GetVMHealthWithResponse call
-func ParseGetVMHealthResponse(rsp *http.Response) (*GetVMHealthResponse, error) {
+// ParseListVmHealthResponse parses an HTTP response from a ListVmHealthWithResponse call
+func ParseListVmHealthResponse(rsp *http.Response) (*ListVmHealthResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetVMHealthResponse{
+	response := &ListVmHealthResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -744,15 +828,15 @@ func ParseGetVMHealthResponse(rsp *http.Response) (*GetVMHealthResponse, error) 
 	return response, nil
 }
 
-// ParseDeleteVMResponse parses an HTTP response from a DeleteVMWithResponse call
-func ParseDeleteVMResponse(rsp *http.Response) (*DeleteVMResponse, error) {
+// ParseDeleteVmResponse parses an HTTP response from a DeleteVmWithResponse call
+func ParseDeleteVmResponse(rsp *http.Response) (*DeleteVmResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &DeleteVMResponse{
+	response := &DeleteVmResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -777,15 +861,15 @@ func ParseDeleteVMResponse(rsp *http.Response) (*DeleteVMResponse, error) {
 	return response, nil
 }
 
-// ParseGetVMResponse parses an HTTP response from a GetVMWithResponse call
-func ParseGetVMResponse(rsp *http.Response) (*GetVMResponse, error) {
+// ParseGetVmResponse parses an HTTP response from a GetVmWithResponse call
+func ParseGetVmResponse(rsp *http.Response) (*GetVmResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetVMResponse{
+	response := &GetVmResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
