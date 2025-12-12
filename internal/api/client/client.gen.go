@@ -250,9 +250,9 @@ func NewListVmsRequest(server string, params *ListVmsParams) (*http.Request, err
 
 		}
 
-		if params.Id != nil {
+		if params.RequestId != nil {
 
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "id", runtime.ParamLocationQuery, *params.Id); err != nil {
+			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "request_id", runtime.ParamLocationQuery, *params.RequestId); err != nil {
 				return nil, err
 			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
 				return nil, err

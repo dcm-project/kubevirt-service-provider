@@ -433,8 +433,8 @@ type ListVmsParams struct {
 	// PageToken Token for pagination
 	PageToken *string `form:"page_token,omitempty" json:"page_token,omitempty"`
 
-	// Id Filter by request ID (UUID)
-	Id *openapi_types.UUID `form:"id,omitempty" json:"id,omitempty"`
+	// RequestId Filter by request ID (UUID)
+	RequestId *openapi_types.UUID `form:"request_id,omitempty" json:"request_id,omitempty"`
 }
 
 // CreateVmParams defines parameters for CreateVm.
@@ -542,11 +542,11 @@ func (siw *ServerInterfaceWrapper) ListVms(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// ------------- Optional query parameter "id" -------------
+	// ------------- Optional query parameter "request_id" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "id", r.URL.Query(), &params.Id)
+	err = runtime.BindQueryParameter("form", true, false, "request_id", r.URL.Query(), &params.RequestId)
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "request_id", Err: err})
 		return
 	}
 

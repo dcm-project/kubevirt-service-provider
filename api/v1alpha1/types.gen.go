@@ -425,8 +425,8 @@ type ListVmsParams struct {
 	// PageToken Token for pagination
 	PageToken *string `form:"page_token,omitempty" json:"page_token,omitempty"`
 
-	// Id Filter by request ID (UUID)
-	Id *openapi_types.UUID `form:"id,omitempty" json:"id,omitempty"`
+	// RequestId Filter by request ID (UUID)
+	RequestId *openapi_types.UUID `form:"request_id,omitempty" json:"request_id,omitempty"`
 }
 
 // CreateVmParams defines parameters for CreateVm.
