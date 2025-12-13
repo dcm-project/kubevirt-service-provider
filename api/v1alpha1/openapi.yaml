@@ -769,6 +769,17 @@ components:
                       type: integer
                       description: NodePort number for SSH access
                       example: 32222
+    VMStatus:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          description: Status of the vm
+        message:
+          type: string
+          description: Description for the status of the VM.
 
     Error:
       required:

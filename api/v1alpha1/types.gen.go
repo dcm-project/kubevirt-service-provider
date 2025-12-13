@@ -417,6 +417,15 @@ type VMSpecStorageDisksBus string
 // - thick-eager: Pre-allocated (eager-zeroed)
 type VMSpecStorageDisksFormat string
 
+// VMStatus defines model for VMStatus.
+type VMStatus struct {
+	// Message Description for the status of the VM.
+	Message *string `json:"message,omitempty"`
+
+	// Status Status of the vm
+	Status string `json:"status"`
+}
+
 // ListVmsParams defines parameters for ListVms.
 type ListVmsParams struct {
 	// MaxPageSize Maximum number of results to return per page
