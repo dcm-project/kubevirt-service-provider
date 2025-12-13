@@ -11,6 +11,7 @@ import (
 
 type ProviderApplication interface {
 	List(ctx context.Context) (model.ProviderApplicationList, error)
+	ListActive(ctx context.Context) (model.ProviderApplicationList, error)
 	Create(ctx context.Context, app model.ProviderApplication) (*model.ProviderApplication, error)
 	Delete(ctx context.Context, id uuid.UUID) error
 	Get(ctx context.Context, id uuid.UUID) (*model.ProviderApplication, error)
@@ -31,6 +32,19 @@ func (s *ProviderApplicationStore) List(ctx context.Context) (model.ProviderAppl
 	var apps model.ProviderApplicationList
 	tx := s.db.WithContext(ctx).Model(&apps)
 	result := tx.Find(&apps)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return apps, nil
+}
+
+// ListActive returns only active (non-deleted) applications that are not in DELETED status
+// This is more efficient than List() as it filters at the database level
+func (s *ProviderApplicationStore) ListActive(ctx context.Context) (model.ProviderApplicationList, error) {
+	var apps model.ProviderApplicationList
+	result := s.db.WithContext(ctx).
+		Where("status != ?", "DELETED").
+		Find(&apps)
 	if result.Error != nil {
 		return nil, result.Error
 	}

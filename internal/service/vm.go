@@ -39,6 +39,9 @@ const (
 	StatusCreated    = "CREATED"
 	StatusInProgress = "IN_PROGRESS"
 	StatusReady      = "READY"
+	StatusFailed     = "FAILED"
+	StatusDeleted    = "DELETED"
+	StatusUnknown    = "UNKNOWN"
 )
 
 // CreateVM creates a new virtual machine in the cluster and stores its metadata in the database

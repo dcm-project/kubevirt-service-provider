@@ -36,11 +36,11 @@ const (
 )
 
 type Server struct {
-	cfg        *config.Config
-	store      store.Store
-	listener   net.Listener
-	virtClient kubecli.KubevirtClient
-	//vmStatusSync *service.VMStatusSyncService
+	cfg          *config.Config
+	store        store.Store
+	listener     net.Listener
+	virtClient   kubecli.KubevirtClient
+	vmStatusSync *service.VMStatusSyncService
 }
 
 // New returns a new instance of a migration-planner server.
@@ -56,13 +56,13 @@ func New(
 		zap.S().Fatalw("cannot obtain KubeVirt client", "error", err)
 	}
 
-	//vmStatusSync := service.NewVMStatusSyncService(virtClient, store)
+	vmStatusSync := service.NewVMStatusSyncService(virtClient, store, cfg.Service.DcmUrl)
 	return &Server{
-		cfg:        cfg,
-		store:      store,
-		listener:   listener,
-		virtClient: virtClient,
-		//vmStatusSync: vmStatusSync,
+		cfg:          cfg,
+		store:        store,
+		listener:     listener,
+		virtClient:   virtClient,
+		vmStatusSync: vmStatusSync,
 	}
 }
 
@@ -72,9 +72,6 @@ func oapiErrorHandler(w http.ResponseWriter, message string, statusCode int) {
 
 func (s *Server) Run(ctx context.Context) error {
 	zap.S().Named("api_server").Info("Initializing API server")
-
-	// Start VM status sync job in background
-	//go s.vmStatusSync.StartSyncJob(ctx)
 
 	swagger, err := api.GetSwagger()
 	if err != nil {
@@ -157,6 +154,9 @@ func (s *Server) Run(ctx context.Context) error {
 		}
 	}()
 
+	// Start VMI watcher in background
+	go s.vmStatusSync.StartWatcher(ctx)
+
 	// Wait for context cancellation or server error
 	select {
 	case <-ctx.Done():
@@ -208,7 +208,7 @@ func (s *Server) registerWithDCMServiceProviderAPI(ctx context.Context) error {
 		return fmt.Errorf("apiHost cannot be empty: listener address unavailable and BaseUrl not configured")
 	}
 
-	registrar := dcm.New(dcm.Config{BaseURL: s.cfg.Service.RegistryUrl})
+	registrar := dcm.New(dcm.Config{BaseURL: s.cfg.Service.DcmUrl})
 
 	request := &dcm.RegistrationRequest{
 		ServiceID: "123e4567-e89b-12d3-a456-426614174222",
