@@ -458,11 +458,11 @@ type ServerInterface interface {
 	// (GET /api/v1/vm/health)
 	ListVmHealth(w http.ResponseWriter, r *http.Request)
 	// Delete a virtual machine
-	// (DELETE /api/v1/vm/{vmId})
-	DeleteVm(w http.ResponseWriter, r *http.Request, vmId openapi_types.UUID)
+	// (DELETE /api/v1/vm/{vmName})
+	DeleteVm(w http.ResponseWriter, r *http.Request, vmName string)
 	// Get virtual machine applications
-	// (GET /api/v1/vm/{vmId})
-	GetVm(w http.ResponseWriter, r *http.Request, vmId openapi_types.UUID)
+	// (GET /api/v1/vm/{vmName})
+	GetVm(w http.ResponseWriter, r *http.Request, vmName string)
 	// Health check
 	// (GET /health)
 	ListHealth(w http.ResponseWriter, r *http.Request)
@@ -491,14 +491,14 @@ func (_ Unimplemented) ListVmHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete a virtual machine
-// (DELETE /api/v1/vm/{vmId})
-func (_ Unimplemented) DeleteVm(w http.ResponseWriter, r *http.Request, vmId openapi_types.UUID) {
+// (DELETE /api/v1/vm/{vmName})
+func (_ Unimplemented) DeleteVm(w http.ResponseWriter, r *http.Request, vmName string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Get virtual machine applications
-// (GET /api/v1/vm/{vmId})
-func (_ Unimplemented) GetVm(w http.ResponseWriter, r *http.Request, vmId openapi_types.UUID) {
+// (GET /api/v1/vm/{vmName})
+func (_ Unimplemented) GetVm(w http.ResponseWriter, r *http.Request, vmName string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -610,17 +610,17 @@ func (siw *ServerInterfaceWrapper) DeleteVm(w http.ResponseWriter, r *http.Reque
 
 	var err error
 
-	// ------------- Path parameter "vmId" -------------
-	var vmId openapi_types.UUID
+	// ------------- Path parameter "vmName" -------------
+	var vmName string
 
-	err = runtime.BindStyledParameterWithOptions("simple", "vmId", chi.URLParam(r, "vmId"), &vmId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "vmName", chi.URLParam(r, "vmName"), &vmName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vmId", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vmName", Err: err})
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteVm(w, r, vmId)
+		siw.Handler.DeleteVm(w, r, vmName)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -636,17 +636,17 @@ func (siw *ServerInterfaceWrapper) GetVm(w http.ResponseWriter, r *http.Request)
 
 	var err error
 
-	// ------------- Path parameter "vmId" -------------
-	var vmId openapi_types.UUID
+	// ------------- Path parameter "vmName" -------------
+	var vmName string
 
-	err = runtime.BindStyledParameterWithOptions("simple", "vmId", chi.URLParam(r, "vmId"), &vmId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "vmName", chi.URLParam(r, "vmName"), &vmName, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vmId", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "vmName", Err: err})
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetVm(w, r, vmId)
+		siw.Handler.GetVm(w, r, vmName)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -794,10 +794,10 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/api/v1/vm/health", wrapper.ListVmHealth)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/api/v1/vm/{vmId}", wrapper.DeleteVm)
+		r.Delete(options.BaseURL+"/api/v1/vm/{vmName}", wrapper.DeleteVm)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/api/v1/vm/{vmId}", wrapper.GetVm)
+		r.Get(options.BaseURL+"/api/v1/vm/{vmName}", wrapper.GetVm)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/health", wrapper.ListHealth)
@@ -899,7 +899,7 @@ func (response ListVmHealth200TextResponse) VisitListVmHealthResponse(w http.Res
 }
 
 type DeleteVmRequestObject struct {
-	VmId openapi_types.UUID `json:"vmId"`
+	VmName string `json:"vmName"`
 }
 
 type DeleteVmResponseObject interface {
@@ -933,7 +933,7 @@ func (response DeleteVm500JSONResponse) VisitDeleteVmResponse(w http.ResponseWri
 }
 
 type GetVmRequestObject struct {
-	VmId openapi_types.UUID `json:"vmId"`
+	VmName string `json:"vmName"`
 }
 
 type GetVmResponseObject interface {
@@ -996,10 +996,10 @@ type StrictServerInterface interface {
 	// (GET /api/v1/vm/health)
 	ListVmHealth(ctx context.Context, request ListVmHealthRequestObject) (ListVmHealthResponseObject, error)
 	// Delete a virtual machine
-	// (DELETE /api/v1/vm/{vmId})
+	// (DELETE /api/v1/vm/{vmName})
 	DeleteVm(ctx context.Context, request DeleteVmRequestObject) (DeleteVmResponseObject, error)
 	// Get virtual machine applications
-	// (GET /api/v1/vm/{vmId})
+	// (GET /api/v1/vm/{vmName})
 	GetVm(ctx context.Context, request GetVmRequestObject) (GetVmResponseObject, error)
 	// Health check
 	// (GET /health)
@@ -1119,10 +1119,10 @@ func (sh *strictHandler) ListVmHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteVm operation middleware
-func (sh *strictHandler) DeleteVm(w http.ResponseWriter, r *http.Request, vmId openapi_types.UUID) {
+func (sh *strictHandler) DeleteVm(w http.ResponseWriter, r *http.Request, vmName string) {
 	var request DeleteVmRequestObject
 
-	request.VmId = vmId
+	request.VmName = vmName
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.DeleteVm(ctx, request.(DeleteVmRequestObject))
@@ -1145,10 +1145,10 @@ func (sh *strictHandler) DeleteVm(w http.ResponseWriter, r *http.Request, vmId o
 }
 
 // GetVm operation middleware
-func (sh *strictHandler) GetVm(w http.ResponseWriter, r *http.Request, vmId openapi_types.UUID) {
+func (sh *strictHandler) GetVm(w http.ResponseWriter, r *http.Request, vmName string) {
 	var request GetVmRequestObject
 
-	request.VmId = vmId
+	request.VmName = vmName
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
 		return sh.ssi.GetVm(ctx, request.(GetVmRequestObject))

@@ -143,19 +143,18 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /api/v1/vm/{vmId}:
+  /api/v1/vm/{vmName}:
     get:
       summary: Get virtual machine applications
       operationId: getVm
       description: Get a virtual machine applications.
       parameters:
-        - name: vmId
+        - name: vmName
           in: path
           required: true
           schema:
             type: string
-            format: uuid
-            example: "123e4567-e89b-12d3-a456-426614174000"
+            example: "fedora-vm"
       responses:
         '200':
           description: OK
@@ -180,13 +179,12 @@ paths:
       operationId: deleteVm
       description: Delete a virtual machine instance
       parameters:
-        - name: vmId
+        - name: vmName
           in: path
           required: true
           schema:
             type: string
-            format: uuid
-            example: "123e4567-e89b-12d3-a456-426614174000"
+            example: "fedora-vm"
       responses:
         '204':
           description: No Content

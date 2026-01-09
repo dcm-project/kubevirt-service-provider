@@ -15,7 +15,6 @@ import (
 
 	. "github.com/dcm-project/service-provider-api/api/v1alpha1"
 	"github.com/oapi-codegen/runtime"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
@@ -103,10 +102,10 @@ type ClientInterface interface {
 	ListVmHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteVm request
-	DeleteVm(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	DeleteVm(ctx context.Context, vmName string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetVm request
-	GetVm(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetVm(ctx context.Context, vmName string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListHealth request
 	ListHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -160,8 +159,8 @@ func (c *Client) ListVmHealth(ctx context.Context, reqEditors ...RequestEditorFn
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteVm(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteVmRequest(c.Server, vmId)
+func (c *Client) DeleteVm(ctx context.Context, vmName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteVmRequest(c.Server, vmName)
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +171,8 @@ func (c *Client) DeleteVm(ctx context.Context, vmId openapi_types.UUID, reqEdito
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetVm(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetVmRequest(c.Server, vmId)
+func (c *Client) GetVm(ctx context.Context, vmName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetVmRequest(c.Server, vmName)
 	if err != nil {
 		return nil, err
 	}
@@ -367,12 +366,12 @@ func NewListVmHealthRequest(server string) (*http.Request, error) {
 }
 
 // NewDeleteVmRequest generates requests for DeleteVm
-func NewDeleteVmRequest(server string, vmId openapi_types.UUID) (*http.Request, error) {
+func NewDeleteVmRequest(server string, vmName string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "vmId", runtime.ParamLocationPath, vmId)
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "vmName", runtime.ParamLocationPath, vmName)
 	if err != nil {
 		return nil, err
 	}
@@ -401,12 +400,12 @@ func NewDeleteVmRequest(server string, vmId openapi_types.UUID) (*http.Request, 
 }
 
 // NewGetVmRequest generates requests for GetVm
-func NewGetVmRequest(server string, vmId openapi_types.UUID) (*http.Request, error) {
+func NewGetVmRequest(server string, vmName string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
 
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "vmId", runtime.ParamLocationPath, vmId)
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "vmName", runtime.ParamLocationPath, vmName)
 	if err != nil {
 		return nil, err
 	}
@@ -516,10 +515,10 @@ type ClientWithResponsesInterface interface {
 	ListVmHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListVmHealthResponse, error)
 
 	// DeleteVmWithResponse request
-	DeleteVmWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteVmResponse, error)
+	DeleteVmWithResponse(ctx context.Context, vmName string, reqEditors ...RequestEditorFn) (*DeleteVmResponse, error)
 
 	// GetVmWithResponse request
-	GetVmWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetVmResponse, error)
+	GetVmWithResponse(ctx context.Context, vmName string, reqEditors ...RequestEditorFn) (*GetVmResponse, error)
 
 	// ListHealthWithResponse request
 	ListHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListHealthResponse, error)
@@ -702,8 +701,8 @@ func (c *ClientWithResponses) ListVmHealthWithResponse(ctx context.Context, reqE
 }
 
 // DeleteVmWithResponse request returning *DeleteVmResponse
-func (c *ClientWithResponses) DeleteVmWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteVmResponse, error) {
-	rsp, err := c.DeleteVm(ctx, vmId, reqEditors...)
+func (c *ClientWithResponses) DeleteVmWithResponse(ctx context.Context, vmName string, reqEditors ...RequestEditorFn) (*DeleteVmResponse, error) {
+	rsp, err := c.DeleteVm(ctx, vmName, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -711,8 +710,8 @@ func (c *ClientWithResponses) DeleteVmWithResponse(ctx context.Context, vmId ope
 }
 
 // GetVmWithResponse request returning *GetVmResponse
-func (c *ClientWithResponses) GetVmWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetVmResponse, error) {
-	rsp, err := c.GetVm(ctx, vmId, reqEditors...)
+func (c *ClientWithResponses) GetVmWithResponse(ctx context.Context, vmName string, reqEditors ...RequestEditorFn) (*GetVmResponse, error) {
+	rsp, err := c.GetVm(ctx, vmName, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
