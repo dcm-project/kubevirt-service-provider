@@ -1,109 +1,58 @@
-.PHONY: build run test clean fmt vet generate check-generate check-aep help 
+BINARY_NAME := kubevirt-service-provider
 
-# Go binary path
-GOBIN := $(shell go env GOPATH)/bin
-
-# Build the application
 build:
-	go build -o bin/kubevirt-service-provider ./cmd/kubevirt-service-provider
+	go build -o bin/$(BINARY_NAME) ./cmd/$(BINARY_NAME)
 
-# Check AEP compliance
-check-aep:
-	spectral lint -r .spectral.yaml ./api/v1alpha1/openapi.yaml
-
-# Run the application
 run:
-	go run ./cmd/kubevirt-provider-api
+	go run ./cmd/$(BINARY_NAME)
 
-# Run tests
-test:
-	go test ./...
-
-# Clean build artifacts
 clean:
 	rm -rf bin/
 
-# Format code
 fmt:
-	go fmt ./...
+	gofmt -s -w .
 
-# Vet code
 vet:
 	go vet ./...
 
-# Install dependencies
+test:
+	go test ./...
+
 tidy:
 	go mod tidy
 
-# Run all checks
-check: fmt vet test
+generate-types:
+	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen \
+		--config=api/v1alpha1/types.gen.cfg \
+		-o api/v1alpha1/types.gen.go \
+		api/v1alpha1/openapi.yaml
 
-# Build and run
-dev: build
-	./bin/kubevirt-service-provider
+generate-spec:
+	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen \
+		--config=api/v1alpha1/spec.gen.cfg \
+		-o api/v1alpha1/spec.gen.go \
+		api/v1alpha1/openapi.yaml
 
-##################### "make generate" support start ##########################
-MOQ := $(GOBIN)/moq
+generate-server:
+	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen \
+		--config=internal/api/server/server.gen.cfg \
+		-o internal/api/server/server.gen.go \
+		api/v1alpha1/openapi.yaml
 
-# Install moq if not already present
-$(MOQ):
-	@echo "📦 Installing moq..."
-	@go install github.com/matryer/moq@latest
-	@echo "✅ 'moq' installed successfully."
+generate-client:
+	go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen \
+		--config=pkg/client/client.gen.cfg \
+		-o pkg/client/client.gen.go \
+		api/v1alpha1/openapi.yaml
 
-# Code generation
-generate: $(MOQ)
-	@echo "⚙️ Running go generate..."
-	@PATH="$(GOBIN):$$PATH" go generate -v $(shell go list ./...)
-	@echo "⚙️ Running mockgen script..."
-	@hack/mockgen.sh
-	@$(MAKE) format
-	@echo "✅ Generate complete."
+generate-api: generate-types generate-spec generate-server generate-client
 
-# Check if generate changes the repo
-check-generate: generate
-	@echo "🔍 Checking if generated files are up to date..."
-	@git diff --quiet || (echo "❌ Detected uncommitted changes after generate. Run 'make generate' and commit the result." && git status && exit 1)
-	@echo "✅ All generated files are up to date."
-##################### "make generate" support end   ##########################
+check-generate-api: generate-api
+	git diff --exit-code api/ internal/api/server/ pkg/client/ || \
+		(echo "Generated files out of sync. Run 'make generate-api'." && exit 1)
 
-##################### "make format" support start ##########################
-GOIMPORTS := $(GOBIN)/goimports
+# Check AEP compliance
+check-aep:
+	spectral lint --fail-severity=warn ./api/v1alpha1/openapi.yaml
 
-# Install goimports if not already available
-$(GOIMPORTS):
-	@echo "📦 Installing goimports..."
-	@go install golang.org/x/tools/cmd/goimports@latest
-	@echo "✅ 'goimports' installed successfully."
-
-# Format Go code using gofmt and goimports
-format: $(GOIMPORTS)
-	@echo "🧹 Formatting Go code..."
-	@gofmt -s -w .
-	@$(GOIMPORTS) -w .
-	@echo "✅ Format complete."
-
-# Check that formatting does not introduce changes
-check-format: format
-	@echo "🔍 Checking if formatting is up to date..."
-	@git diff --quiet || (echo "❌ Detected uncommitted changes after format. Run 'make format' and commit the result." && git status && exit 1)
-	@echo "✅ All formatted files are up to date."
-##################### "make format" support end   ##########################
-
-# Help
-help:
-	@echo "Available targets:"
-	@echo "  build           - Build the application"
-	@echo "  run             - Run the application"
-	@echo "  test            - Run tests"
-	@echo "  clean           - Clean build artifacts"
-	@echo "  fmt             - Format code"
-	@echo "  vet             - Vet code"
-	@echo "  tidy            - Tidy dependencies"
-	@echo "  check           - Run all checks (fmt, vet, test)"
-	@echo "  check-aep       - Check AEP compliance of OpenAPI spec"
-	@echo "  dev             - Build and run"
-	@echo "  generate        - Generate code from OpenAPI specification"
-	@echo "  help            - Show this help"
-
-include deploy/deploy.mk
+.PHONY: build run clean fmt vet test tidy generate-types generate-spec generate-server generate-client generate-api check-generate-api check-aep
