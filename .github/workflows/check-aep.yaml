@@ -1,0 +1,20 @@
+name: Check AEP Compliance
+
+on:
+  pull_request:
+    paths:
+      - 'api/**/openapi.yaml'
+      - '.spectral.yaml'
+
+jobs:
+  check-aep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Spectral
+        run: npm install -g @stoplight/spectral-cli
+
+      - name: Check AEP compliance
+        run: make check-aep
+

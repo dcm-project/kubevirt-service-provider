@@ -1,0 +1,23 @@
+name: Check Generated Files
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'api/**'
+      - '**/*.gen.cfg'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check generated files
+        run: make check-generate-api
+
