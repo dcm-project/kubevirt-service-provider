@@ -16,7 +16,7 @@ vet:
 	go vet ./...
 
 test:
-	go test ./...
+	go run github.com/onsi/ginkgo/v2/ginkgo -r --randomize-all --fail-on-pending
 
 tidy:
 	go mod tidy
@@ -56,3 +56,4 @@ check-aep:
 	spectral lint --fail-severity=warn ./api/v1alpha1/openapi.yaml
 
 .PHONY: build run clean fmt vet test tidy generate-types generate-spec generate-server generate-client generate-api check-generate-api check-aep
+
