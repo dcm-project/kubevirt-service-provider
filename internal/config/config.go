@@ -6,11 +6,6 @@ import (
 	"github.com/kelseyhightower/envconfig"
 )
 
-type Config struct {
-	ProviderConfig               *ProviderConfig
-	ServiceProviderManagerConfig *ServiceProviderManagerConfig
-}
-
 type ProviderConfig struct {
 	ListenAddress string `envconfig:"PROVIDER_LISTEN_ADDRESS" default:"0.0.0.0:8081"`
 	// Name is the name to register this provider as
@@ -31,6 +26,24 @@ type ProviderConfig struct {
 type ServiceProviderManagerConfig struct {
 	// Endpoint is the URL of the Service Manager API
 	Endpoint string `envconfig:"SERVICE_MANAGER_ENDPOINT" default:"http://localhost:8080/api/v1alpha1"`
+}
+
+// KubernetesConfig holds configuration for connecting to Kubernetes/KubeVirt
+type KubernetesConfig struct {
+	// Kubeconfig path for connecting to Kubernetes cluster (optional, defaults to in-cluster)
+	Kubeconfig string `envconfig:"KUBERNETES_KUBECONFIG"`
+	// Namespace for creating VMs
+	Namespace string `envconfig:"KUBERNETES_NAMESPACE" default:"default"`
+	// Timeout for Kubernetes API requests
+	Timeout time.Duration `envconfig:"KUBERNETES_TIMEOUT" default:"60s"`
+	// MaxRetries for failed operations
+	MaxRetries int `envconfig:"KUBERNETES_MAX_RETRIES" default:"3"`
+}
+
+type Config struct {
+	ProviderConfig               *ProviderConfig
+	ServiceProviderManagerConfig *ServiceProviderManagerConfig
+	KubernetesConfig            *KubernetesConfig
 }
 
 func Load() (*Config, error) {

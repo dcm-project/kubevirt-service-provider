@@ -12,6 +12,7 @@ import (
 	apiserver "github.com/dcm-project/kubevirt-service-provider/internal/api_server"
 	"github.com/dcm-project/kubevirt-service-provider/internal/config"
 	handlers "github.com/dcm-project/kubevirt-service-provider/internal/handlers/v1alpha1"
+	"github.com/dcm-project/kubevirt-service-provider/internal/kubevirt"
 	"github.com/dcm-project/kubevirt-service-provider/internal/registration"
 )
 
@@ -39,7 +40,19 @@ func main() {
 		log.Fatalf("Failed to register with DCM: %v", err)
 	}
 
-	srv := apiserver.New(cfg, listener, handlers.NewKubevirtHandler())
+	// Initialize KubeVirt client
+	kubevirtClient, err := kubevirt.NewClient(cfg.KubernetesConfig)
+	if err != nil {
+		log.Fatalf("Failed to create KubeVirt client: %v", err)
+	}
+
+	// Initialize mapper
+	mapper := kubevirt.NewMapper(cfg.KubernetesConfig.Namespace)
+
+	// Create handler with dependencies
+	handler := handlers.NewKubevirtHandler(kubevirtClient, mapper)
+
+	srv := apiserver.New(cfg, listener, handler)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

@@ -290,6 +290,10 @@ components:
         patterns:
           - vms/{vm_id}
       properties:
+        id:
+          type: string
+          description: ID of the VM
+          example: "123e4567-e89b-12d3-a456-426614174000"
         path:
           type: string
           readOnly: true

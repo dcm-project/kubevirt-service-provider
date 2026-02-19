@@ -45,7 +45,7 @@ type Health struct {
 
 // VM Provider-agnostic virtual machine specification.
 //
-// Includes common fields (serviceType, metadata, providerHints)
+// Includes common fields (service_type, metadata, provider_hints)
 // plus VM-specific fields for compute, storage, and operating system.
 //
 // Providers translate this abstract specification to their native format.
