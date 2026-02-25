@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -17,10 +18,11 @@ import (
 
 // Client wraps the Kubernetes dynamic client for KubeVirt operations
 type Client struct {
-	dynamicClient dynamic.Interface
-	namespace     string
-	timeout       time.Duration
-	maxRetries    int
+	dynamicClient   dynamic.Interface
+	informerFactory dynamicinformer.DynamicSharedInformerFactory
+	namespace       string
+	timeout         time.Duration
+	maxRetries      int
 }
 
 var (
@@ -56,11 +58,20 @@ func NewClient(cfg *config.KubernetesConfig) (*Client, error) {
 		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
 	}
 
+	// Create informer factory for monitoring service
+	informerFactory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(
+		dynamicClient,
+		30*time.Minute, // Default resync period
+		cfg.Namespace,
+		nil, // No label selector filtering
+	)
+
 	return &Client{
-		dynamicClient: dynamicClient,
-		namespace:     cfg.Namespace,
-		timeout:       cfg.Timeout,
-		maxRetries:    cfg.MaxRetries,
+		dynamicClient:   dynamicClient,
+		informerFactory: informerFactory,
+		namespace:       cfg.Namespace,
+		timeout:         cfg.Timeout,
+		maxRetries:      cfg.MaxRetries,
 	}, nil
 }
 
@@ -122,4 +133,9 @@ func (c *Client) UpdateVirtualMachine(ctx context.Context, vm *unstructured.Unst
 	defer cancel()
 
 	return c.dynamicClient.Resource(virtualMachineGVR).Namespace(c.namespace).Update(timeoutCtx, vm, metav1.UpdateOptions{})
+}
+
+// DynamicClient returns the underlying dynamic client
+func (c *Client) DynamicClient() dynamic.Interface {
+	return c.dynamicClient
 }
