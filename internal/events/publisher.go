@@ -23,9 +23,10 @@ type VMEvent struct {
 
 // Publisher handles NATS event publishing with CloudEvents formatting
 type Publisher struct {
-	natsConn *nats.Conn
-	natsURL  string
-	timeout  time.Duration
+	natsConn     *nats.Conn
+	natsURL      string
+	timeout      time.Duration
+	maxReconnect int
 }
 
 // PublisherConfig contains configuration for the event publisher
@@ -38,8 +39,9 @@ type PublisherConfig struct {
 // NewPublisher creates a new NATS publisher
 func NewPublisher(config PublisherConfig) (*Publisher, error) {
 	p := &Publisher{
-		natsURL: config.NATSURL,
-		timeout: config.Timeout,
+		natsURL:      config.NATSURL,
+		timeout:      config.Timeout,
+		maxReconnect: config.MaxReconnect,
 	}
 
 	// Connect to NATS
@@ -54,7 +56,7 @@ func NewPublisher(config PublisherConfig) (*Publisher, error) {
 func (p *Publisher) connect() error {
 	opts := []nats.Option{
 		nats.ReconnectWait(2 * time.Second),
-		nats.MaxReconnects(-1), // Unlimited reconnects
+		nats.MaxReconnects(p.maxReconnect), // Use configured reconnect limit
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			log.Printf("NATS disconnected: %v", err)
 		}),

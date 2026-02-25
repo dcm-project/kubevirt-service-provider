@@ -11,18 +11,12 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
+	"github.com/dcm-project/kubevirt-service-provider/internal/constants"
 	"github.com/dcm-project/kubevirt-service-provider/internal/kubevirt"
 )
 
 const (
 	ApiPrefix = "/api/v1alpha1/"
-
-	// LabelManagedBy is the label key for DCM-managed resources
-	LabelManagedBy = "dcm.project/managed-by"
-	// LabelManagedByValue is the value indicating the resource is managed by DCM
-	LabelManagedByValue = "dcm"
-	// LabelDCMInstanceID is the label key for the DCM instance (VM) ID
-	LabelDCMInstanceID = "dcm.project/dcm-instance-id"
 )
 
 type KubevirtHandler struct {
@@ -55,7 +49,7 @@ func unstructuredVMToServerVM(s *KubevirtHandler, vm *unstructured.Unstructured)
 	}
 	var path *string
 	labels, _, _ := unstructured.NestedStringMap(vm.Object, "spec", "template", "metadata", "labels")
-	if vmID, ok := labels[LabelDCMInstanceID]; ok && vmID != "" {
+	if vmID, ok := labels[constants.DCMLabelInstanceID]; ok && vmID != "" {
 		p := fmt.Sprintf("%svms/%s", ApiPrefix, vmID)
 		path = &p
 	}
@@ -75,7 +69,7 @@ func (s *KubevirtHandler) GetHealth(ctx context.Context, request server.GetHealt
 // (GET /vms)
 func (s *KubevirtHandler) ListVMs(ctx context.Context, request server.ListVMsRequestObject) (server.ListVMsResponseObject, error) {
 	listOptions := metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("%s=%s", LabelManagedBy, LabelManagedByValue),
+		LabelSelector: fmt.Sprintf("%s=%s", constants.DCMLabelManagedBy, constants.DCMManagedByValue),
 	}
 	list, err := s.kubevirtClient.ListVirtualMachines(ctx, listOptions)
 	if err != nil {
@@ -133,8 +127,55 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 	// Check for existing VM (idempotency support)
 	existingVM, err := s.kubevirtClient.GetVirtualMachine(ctx, vmName)
 	if err == nil && existingVM != nil {
-		// VM already exists, return existing VM
-		return server.CreateVM201JSONResponse(*vmSpec), nil
+		// VM already exists: derive ID from labels and ensure response reflects stored state
+		existingVMID := s.extractVMIDFromVM(existingVM)
+		if existingVMID != "" {
+			vmID = existingVMID
+		}
+
+		// Handle potential name collision when client did not provide explicit ID
+		if request.Params.Id == nil && existingVMID != vmID {
+			// Name collision with different VM, return conflict
+			status := 409
+			title := "Conflict"
+			typ := "about:blank"
+			detail := fmt.Sprintf("Virtual machine name collision detected for %s", vmName)
+			return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
+				Body: server.Error{
+					Title:  title,
+					Type:   typ,
+					Status: &status,
+					Detail: &detail,
+				},
+				StatusCode: status,
+			}, nil
+		}
+
+		// Convert existing VM back to VMSpec and return 200 OK for idempotent create
+		vmSpec, err := s.mapper.VirtualMachineToVMSpec(existingVM)
+		if err != nil {
+			status := 500
+			title := "Internal Server Error"
+			typ := "about:blank"
+			detail := fmt.Sprintf("Failed to convert existing VM: %v", err)
+			return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
+				Body: server.Error{
+					Title:  title,
+					Type:   typ,
+					Status: &status,
+					Detail: &detail,
+				},
+				StatusCode: status,
+			}, nil
+		}
+
+		// Ensure the spec has the effective ID and path
+		path := fmt.Sprintf("%svms/%s", ApiPrefix, vmID)
+		serverVM := vmSpecToServerVM(vmSpec, vmName, &path)
+
+		// Return 201 Created for existing VM (idempotent create)
+		// Note: OpenAPI spec only defines 201 response, ideally would be 200 for existing resources
+		return server.CreateVM201JSONResponse(*serverVM), nil
 	}
 	// If error is not "not found", handle it
 	if err != nil && !kubevirt.IsNotFoundError(err) {
@@ -360,4 +401,23 @@ func (s *KubevirtHandler) ApplyVM(ctx context.Context, request server.ApplyVMReq
 		},
 		StatusCode: status,
 	}, nil
+}
+
+// extractVMIDFromVM extracts the DCM instance ID from a KubeVirt VM object
+func (s *KubevirtHandler) extractVMIDFromVM(vm *unstructured.Unstructured) string {
+	// First check main metadata labels
+	if labels := vm.GetLabels(); labels != nil {
+		if vmID, found := labels[constants.DCMLabelInstanceID]; found && vmID != "" {
+			return vmID
+		}
+	}
+
+	// Then check template metadata labels (for VMs created before label propagation fix)
+	if templateLabels, found, err := unstructured.NestedStringMap(vm.Object, "spec", "template", "metadata", "labels"); err == nil && found {
+		if vmID, exists := templateLabels[constants.DCMLabelInstanceID]; exists && vmID != "" {
+			return vmID
+		}
+	}
+
+	return ""
 }

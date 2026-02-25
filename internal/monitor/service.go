@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/dcm-project/kubevirt-service-provider/internal/constants"
 	"github.com/dcm-project/kubevirt-service-provider/internal/events"
 )
 
@@ -199,8 +200,8 @@ func (s *Service) isDCMManagedVM(obj *unstructured.Unstructured) bool {
 		return false
 	}
 
-	managedBy, found := labels["dcm.project/managed-by"]
-	return found && managedBy == "dcm"
+	managedBy, found := labels[constants.DCMLabelManagedBy]
+	return found && managedBy == constants.DCMManagedByValue
 }
 
 // GetStats returns monitoring service statistics

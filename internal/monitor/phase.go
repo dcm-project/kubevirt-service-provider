@@ -5,6 +5,8 @@ import (
 	"log"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
+	"github.com/dcm-project/kubevirt-service-provider/internal/constants"
 )
 
 // VMPhase represents the current phase/state of a VM
@@ -57,7 +59,7 @@ func ExtractVMInfo(obj *unstructured.Unstructured) (VMInfo, error) {
 	vmID := ""
 	labels := obj.GetLabels()
 	if labels != nil {
-		if id, found := labels["dcm.project/dcm-instance-id"]; found {
+		if id, found := labels[constants.DCMLabelInstanceID]; found {
 			vmID = id
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
 	catalogv1alpha1 "github.com/dcm-project/catalog-manager/api/v1alpha1/servicetypes/vm"
+	"github.com/dcm-project/kubevirt-service-provider/internal/constants"
 )
 
 // Mapper handles conversion from VMSpec to KubeVirt VirtualMachine resources
@@ -33,8 +34,8 @@ func (m *Mapper) VMSpecToVirtualMachine(vmSpec *catalogv1alpha1.VMSpec, vmName s
 				"name":      vmName,
 				"namespace": m.namespace,
 				"labels": map[string]interface{}{
-					"dcm.project/managed-by":      "dcm",
-					"dcm.project/dcm-instance-id": vmID,
+					constants.DCMLabelManagedBy:   constants.DCMManagedByValue,
+					constants.DCMLabelInstanceID: vmID,
 				},
 			},
 		},
@@ -44,7 +45,12 @@ func (m *Mapper) VMSpecToVirtualMachine(vmSpec *catalogv1alpha1.VMSpec, vmName s
 	spec := map[string]interface{}{
 		"running": true,
 		"template": map[string]interface{}{
-			"metadata": map[string]interface{}{},
+			"metadata": map[string]interface{}{
+				"labels": map[string]interface{}{
+					constants.DCMLabelManagedBy:   constants.DCMManagedByValue,
+					constants.DCMLabelInstanceID: vmID,
+				},
+			},
 			"spec": map[string]interface{}{
 				"domain":   m.buildDomainSpec(vmSpec),
 				"networks": m.buildNetworks(),
@@ -221,49 +227,48 @@ func (m *Mapper) getContainerDiskImage(guestOS catalogv1alpha1.GuestOS) string {
 
 // parseMemorySize converts memory size string to Kubernetes resource format
 func (m *Mapper) parseMemorySize(sizeStr string) (string, error) {
-	// Handle various memory size formats (e.g., "2GB", "2Gi", "2048Mi")
-	sizeStr = strings.TrimSpace(strings.ToUpper(sizeStr))
+	// Trim whitespace but preserve original casing for valid Kubernetes units
+	sizeStr = strings.TrimSpace(sizeStr)
 
-	// If it's already in Kubernetes format, return as-is
-	if strings.HasSuffix(sizeStr, "I") {
-		return sizeStr, nil
+	// First try to parse as a valid Kubernetes quantity
+	if quantity, err := resource.ParseQuantity(sizeStr); err == nil {
+		// Return canonical string representation
+		return quantity.String(), nil
 	}
 
-	// Convert common formats
-	if strings.HasSuffix(sizeStr, "GB") {
-		// Convert GB to Gi (approximately)
-		numStr := strings.TrimSuffix(sizeStr, "GB")
+	// Handle common non-Kubernetes formats
+	upperStr := strings.ToUpper(sizeStr)
+
+	// Convert decimal GB to Gi
+	if strings.HasSuffix(upperStr, "GB") {
+		numStr := strings.TrimSuffix(upperStr, "GB")
 		num, err := strconv.ParseFloat(numStr, 64)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("invalid GB value: %s", numStr)
 		}
-		// 1 GB ≈ 0.93 Gi, so we'll round up slightly
-		giBytes := int64(num * 1024 * 1024 * 1024)
-		return fmt.Sprintf("%d", giBytes), nil
+		// Convert GB to Gi: 1 GB = 1000^3 bytes, 1 Gi = 1024^3 bytes
+		giValue := num * 1000 * 1000 * 1000 / (1024 * 1024 * 1024)
+		return resource.NewQuantity(int64(giValue*1024*1024*1024), resource.BinarySI).String(), nil
 	}
 
-	if strings.HasSuffix(sizeStr, "MB") {
-		numStr := strings.TrimSuffix(sizeStr, "MB")
+	// Convert decimal MB to Mi
+	if strings.HasSuffix(upperStr, "MB") {
+		numStr := strings.TrimSuffix(upperStr, "MB")
 		num, err := strconv.ParseFloat(numStr, 64)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("invalid MB value: %s", numStr)
 		}
-		miBytes := int64(num)
-		return fmt.Sprintf("%dMi", miBytes), nil
+		// Convert MB to Mi: 1 MB = 1000^2 bytes, 1 Mi = 1024^2 bytes
+		miValue := num * 1000 * 1000 / (1024 * 1024)
+		return resource.NewQuantity(int64(miValue*1024*1024), resource.BinarySI).String(), nil
 	}
 
-	// If just a number, assume MB
+	// If just a number, assume Mi
 	if num, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
-		return fmt.Sprintf("%dMi", num), nil
+		return resource.NewQuantity(num*1024*1024, resource.BinarySI).String(), nil
 	}
 
-	// Try to parse as Kubernetes quantity
-	_, err := resource.ParseQuantity(sizeStr)
-	if err != nil {
-		return "", fmt.Errorf("unable to parse memory size: %s", sizeStr)
-	}
-
-	return sizeStr, nil
+	return "", fmt.Errorf("unable to parse memory size: %s", sizeStr)
 }
 
 // parseStorageSize converts storage size string to Kubernetes resource format
