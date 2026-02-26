@@ -3,10 +3,10 @@ package kubevirt_test
 import (
 	"testing"
 
-	catalogv1alpha1 "github.com/dcm-project/catalog-manager/api/v1alpha1/servicetypes/vm"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/dcm-project/kubevirt-service-provider/api/v1alpha1"
 	"github.com/dcm-project/kubevirt-service-provider/internal/kubevirt"
 )
 
@@ -24,20 +24,25 @@ var _ = Describe("Mapper", func() {
 
 	Describe("VMSpecToVirtualMachine", func() {
 		It("should convert a basic VMSpec to VirtualMachine without errors", func() {
-			vmSpec := &catalogv1alpha1.VMSpec{
-				GuestOS: catalogv1alpha1.GuestOS{
+			vmSpec := &v1alpha1.VMSpec{
+				ServiceType: v1alpha1.Vm,
+				Metadata: v1alpha1.ServiceMetadata{
+					Name: "test-vm",
+				},
+				GuestOs: v1alpha1.GuestOS{
 					Type: "ubuntu",
 				},
-				Vcpu: catalogv1alpha1.Vcpu{
+				Vcpu: v1alpha1.Vcpu{
 					Count: 2,
 				},
-				Memory: catalogv1alpha1.Memory{
+				Memory: v1alpha1.Memory{
 					Size: "2Gi",
 				},
-				Storage: catalogv1alpha1.Storage{
-					Disks: []catalogv1alpha1.Disk{
+				Storage: v1alpha1.Storage{
+					Disks: []v1alpha1.Disk{
 						{
-							Name: "boot",
+							Name:     "boot",
+							Capacity: "10Gi",
 						},
 					},
 				},
@@ -56,18 +61,22 @@ var _ = Describe("Mapper", func() {
 		})
 
 		It("should handle empty storage with default boot disk", func() {
-			vmSpec := &catalogv1alpha1.VMSpec{
-				GuestOS: catalogv1alpha1.GuestOS{
+			vmSpec := &v1alpha1.VMSpec{
+				ServiceType: v1alpha1.Vm,
+				Metadata: v1alpha1.ServiceMetadata{
+					Name: "minimal-vm",
+				},
+				GuestOs: v1alpha1.GuestOS{
 					Type: "cirros",
 				},
-				Vcpu: catalogv1alpha1.Vcpu{
+				Vcpu: v1alpha1.Vcpu{
 					Count: 1,
 				},
-				Memory: catalogv1alpha1.Memory{
+				Memory: v1alpha1.Memory{
 					Size: "1Gi",
 				},
-				Storage: catalogv1alpha1.Storage{
-					Disks: []catalogv1alpha1.Disk{},
+				Storage: v1alpha1.Storage{
+					Disks: []v1alpha1.Disk{},
 				},
 			}
 

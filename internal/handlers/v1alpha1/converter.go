@@ -1,88 +1,111 @@
 package v1alpha1
 
 import (
-	catalogv1alpha1 "github.com/dcm-project/catalog-manager/api/v1alpha1/servicetypes/vm"
+	"encoding/json"
+
+	types "github.com/dcm-project/kubevirt-service-provider/api/v1alpha1"
 	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
 )
 
-// serverVMToVMSpec converts our API's server.VM type to the external catalogv1alpha1.VMSpec type
-func serverVMToVMSpec(serverVM *server.VM) *catalogv1alpha1.VMSpec {
+// serverVMToVMSpec converts our API's server.VM type to the types.VMSpec type (spec only, no path)
+func serverVMToVMSpec(serverVM *server.VM) *types.VMSpec {
 	if serverVM == nil {
 		return nil
 	}
 
-	// Build external VMSpec
-	vmSpec := &catalogv1alpha1.VMSpec{}
-
-	// Convert VCPU
-	vmSpec.Vcpu = catalogv1alpha1.Vcpu{
-		Count: serverVM.Vcpu.Count,
+	// Convert between the two identical structures via JSON marshaling
+	data, err := json.Marshal(serverVM)
+	if err != nil {
+		return nil
 	}
 
-	// Convert Memory
-	vmSpec.Memory = catalogv1alpha1.Memory{
-		Size: serverVM.Memory.Size,
+	var vmSpec types.VMSpec
+	if err := json.Unmarshal(data, &vmSpec); err != nil {
+		return nil
 	}
 
-	// Convert GuestOS
-	vmSpec.GuestOS = catalogv1alpha1.GuestOS{
-		Type: serverVM.GuestOS.Type,
-	}
-
-	// Convert Storage
-	vmSpec.Storage = catalogv1alpha1.Storage{}
-	for _, disk := range serverVM.Storage.Disks {
-		vmSpec.Storage.Disks = append(vmSpec.Storage.Disks, catalogv1alpha1.Disk{
-			Name:     disk.Name,
-			Capacity: disk.Capacity,
-		})
-	}
-
-	// Convert Access (optional)
-	if serverVM.Access != nil {
-		vmSpec.Access = &catalogv1alpha1.Access{}
-		if serverVM.Access.SshPublicKey != nil {
-			vmSpec.Access.SshPublicKey = serverVM.Access.SshPublicKey
-		}
-	}
-
-	// Note: Metadata, ServiceType, and ProviderHints use external reference types
-	// that we can't directly instantiate. For now, we'll leave them as default values
-	// and let the mapper handle the minimal conversion needed for KubeVirt.
-	// In a production environment, you'd need to properly map these fields.
-
-	return vmSpec
+	return &vmSpec
 }
 
-// vmSpecToServerVM converts the external catalogv1alpha1.VMSpec type to our API's server.VM type.
-// server.VM is a type alias for catalogv1alpha1.VMSpec, so we build using catalog types.
-func vmSpecToServerVM(vmSpec *catalogv1alpha1.VMSpec, name string, path *string) *server.VM {
+// serverVMToVM converts our API's server.VM type to the types.VM type (full resource)
+func serverVMToVM(serverVM *server.VM) *types.VM {
+	if serverVM == nil {
+		return nil
+	}
+
+	// Convert between the two identical structures via JSON marshaling
+	data, err := json.Marshal(serverVM)
+	if err != nil {
+		return nil
+	}
+
+	var vm types.VM
+	if err := json.Unmarshal(data, &vm); err != nil {
+		return nil
+	}
+
+	return &vm
+}
+
+func vmSpecToServerVM(vmSpec *types.VMSpec, path *string) *server.VM {
 	if vmSpec == nil {
 		return nil
 	}
 
-	// server.VM = catalogv1alpha1.VMSpec; use catalog types for all nested structs
-	vm := &catalogv1alpha1.VMSpec{
-		Vcpu: catalogv1alpha1.Vcpu{
-			Count: vmSpec.Vcpu.Count,
-		},
-		Memory: catalogv1alpha1.Memory{
-			Size: vmSpec.Memory.Size,
-		},
-		GuestOS: catalogv1alpha1.GuestOS{
-			Type: vmSpec.GuestOS.Type,
-		},
-		Storage: catalogv1alpha1.Storage{
-			Disks: vmSpec.Storage.Disks,
-		},
+	// Convert between the two structures via JSON marshaling
+	data, err := json.Marshal(vmSpec)
+	if err != nil {
+		return nil
 	}
-	if vmSpec.Access != nil {
-		vm.Access = &catalogv1alpha1.Access{
-			SshPublicKey: vmSpec.Access.SshPublicKey,
-		}
-	}
-	// Metadata, ServiceType, ProviderHints: leave as zero value or set defaults if needed
-	vm.ServiceType = "vm"
 
-	return (*server.VM)(vm)
+	var serverVM server.VM
+	if err := json.Unmarshal(data, &serverVM); err != nil {
+		return nil
+	}
+
+	serverVM.Path = path
+	return &serverVM
+}
+
+func vmToServerVM(vm *types.VM, path *string) *server.VM {
+	if vm == nil {
+		return nil
+	}
+
+	// Convert between the two identical structures via JSON marshaling
+	data, err := json.Marshal(vm)
+	if err != nil {
+		return nil
+	}
+
+	var serverVM server.VM
+	if err := json.Unmarshal(data, &serverVM); err != nil {
+		return nil
+	}
+
+	// Path should already be set in the VM, but allow override
+	if path != nil {
+		serverVM.Path = path
+	}
+	return &serverVM
+}
+
+// createVMRequestToVMSpec converts CreateVMJSONRequestBody to VMSpec
+func createVMRequestToVMSpec(createVM *server.CreateVMJSONRequestBody) *types.VMSpec {
+	if createVM == nil {
+		return nil
+	}
+
+	// Convert via JSON marshaling to ensure compatibility
+	data, err := json.Marshal(createVM)
+	if err != nil {
+		return nil
+	}
+
+	var vmSpec types.VMSpec
+	if err := json.Unmarshal(data, &vmSpec); err != nil {
+		return nil
+	}
+
+	return &vmSpec
 }

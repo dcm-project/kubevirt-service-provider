@@ -132,6 +132,32 @@ func MapKubernetesError(err error) server.CreateVMResponseObject {
 	}
 }
 
+// InternalServerError returns a problem+json error body and 500 status code for internal server errors.
+// Handlers can use this to build their default application/problem+json response.
+func InternalServerError(detail string) (server.Error, int) {
+	status := http.StatusInternalServerError
+	title := "Internal Server Error"
+	typ := "about:blank"
+	return server.Error{
+		Title:  title,
+		Type:   typ,
+		Status: &status,
+		Detail: &detail,
+	}, status
+}
+
+func ValidationError(detail string) (server.Error, int) {
+	status := http.StatusBadRequest
+	title := "Validation Error"
+	typ := "about:blank"
+	return server.Error{
+		Title:  title,
+		Type:   typ,
+		Status: &status,
+		Detail: &detail,
+	}, status
+}
+
 // IsAlreadyExistsError checks if the error indicates a resource already exists
 func IsAlreadyExistsError(err error) bool {
 	return apierrors.IsAlreadyExists(err)

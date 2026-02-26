@@ -53,7 +53,7 @@ func unstructuredVMToServerVM(s *KubevirtHandler, vm *unstructured.Unstructured)
 		p := fmt.Sprintf("%svms/%s", ApiPrefix, vmID)
 		path = &p
 	}
-	return vmSpecToServerVM(vmSpec, vmName, path), nil
+	return vmSpecToServerVM(vmSpec, path), nil
 }
 
 // (GET /health)
@@ -90,23 +90,6 @@ func (s *KubevirtHandler) ListVMs(ctx context.Context, request server.ListVMsReq
 
 // (POST /vms)
 func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMRequestObject) (server.CreateVMResponseObject, error) {
-	// Validate request body
-	if request.Body == nil {
-		status := 400
-		title := "Bad Request"
-		typ := "about:blank"
-		detail := "Request body is required"
-		return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
-			Body: server.Error{
-				Title:  title,
-				Type:   typ,
-				Status: &status,
-				Detail: &detail,
-			},
-			StatusCode: status,
-		}, nil
-	}
-
 	vmSpec := request.Body
 
 	// Generate VM name and ID
@@ -123,6 +106,7 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 		vmID = generatedID.String()
 		vmName = fmt.Sprintf("vm-%s", strings.ReplaceAll(vmID, "-", "")[:8])
 	}
+	path := fmt.Sprintf("%svms/%s", ApiPrefix, vmID)
 
 	// Check for existing VM (idempotency support)
 	existingVM, err := s.kubevirtClient.GetVirtualMachine(ctx, vmName)
@@ -154,24 +138,15 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 		// Convert existing VM back to VMSpec and return 200 OK for idempotent create
 		vmSpec, err := s.mapper.VirtualMachineToVMSpec(existingVM)
 		if err != nil {
-			status := 500
-			title := "Internal Server Error"
-			typ := "about:blank"
-			detail := fmt.Sprintf("Failed to convert existing VM: %v", err)
+			body, statusCode := kubevirt.InternalServerError(fmt.Sprintf("Failed to convert existing VM: %v", err))
 			return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
-				Body: server.Error{
-					Title:  title,
-					Type:   typ,
-					Status: &status,
-					Detail: &detail,
-				},
-				StatusCode: status,
+				Body:       body,
+				StatusCode: statusCode,
 			}, nil
 		}
 
 		// Ensure the spec has the effective ID and path
-		path := fmt.Sprintf("%svms/%s", ApiPrefix, vmID)
-		serverVM := vmSpecToServerVM(vmSpec, vmName, &path)
+		serverVM := vmSpecToServerVM(vmSpec, &path)
 
 		// Return 201 Created for existing VM (idempotent create)
 		// Note: OpenAPI spec only defines 201 response, ideally would be 200 for existing resources
@@ -183,7 +158,7 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 	}
 
 	// Convert VMSpec to KubeVirt VirtualMachine
-	catalogVMSpec := serverVMToVMSpec(vmSpec)
+	catalogVMSpec := createVMRequestToVMSpec(vmSpec)
 	virtualMachine, err := s.mapper.VMSpecToVirtualMachine(catalogVMSpec, vmName, vmID)
 	if err != nil {
 		status := 422
@@ -209,22 +184,19 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 
 	// Successfully created VM
 	if createdVM != nil {
-		return server.CreateVM201JSONResponse(*vmSpec), nil
+		serverVM, err := unstructuredVMToServerVM(s, createdVM)
+		if err != nil {
+			return kubevirt.MapKubernetesError(err), nil
+		}
+		serverVM.Path = &path
+		return server.CreateVM201JSONResponse(*serverVM), nil
 	}
 
 	// Fallback error
-	status := 500
-	title := "Internal Server Error"
-	typ := "about:blank"
-	detail := "Failed to create virtual machine"
+	body, statusCode := kubevirt.InternalServerError("Failed to create virtual machine")
 	return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
-		Body: server.Error{
-			Title:  title,
-			Type:   typ,
-			Status: &status,
-			Detail: &detail,
-		},
-		StatusCode: status,
+		Body:       body,
+		StatusCode: statusCode,
 	}, nil
 }
 
@@ -291,115 +263,32 @@ func (s *KubevirtHandler) GetVM(ctx context.Context, request server.GetVMRequest
 	// Convert KubeVirt VirtualMachine back to VMSpec
 	vmSpec, err := s.mapper.VirtualMachineToVMSpec(vm)
 	if err != nil {
-		status := 500
-		title := "Internal Server Error"
-		typ := "about:blank"
-		detail := fmt.Sprintf("Failed to convert VirtualMachine to VMSpec: %v", err)
+		body, statusCode := kubevirt.InternalServerError(fmt.Sprintf("Failed to convert VirtualMachine to VMSpec: %v", err))
 		return server.GetVMdefaultApplicationProblemPlusJSONResponse{
-			Body: server.Error{
-				Title:  title,
-				Type:   typ,
-				Status: &status,
-				Detail: &detail,
-			},
-			StatusCode: status,
+			Body:       body,
+			StatusCode: statusCode,
 		}, nil
 	}
 
 	// Convert VMSpec back to server VM and return
 	vmID := request.VmId.String()
 	path := fmt.Sprintf("%svms/%s", ApiPrefix, vmID)
-	serverVM := vmSpecToServerVM(vmSpec, vmName, &path)
+	serverVM := vmSpecToServerVM(vmSpec, &path)
 	return server.GetVM200JSONResponse(*serverVM), nil
 }
 
 // (PUT /vms/{vmId})
 func (s *KubevirtHandler) ApplyVM(ctx context.Context, request server.ApplyVMRequestObject) (server.ApplyVMResponseObject, error) {
-	// Validate request body
-	if request.Body == nil {
-		status := 400
-		title := "Bad Request"
-		typ := "about:blank"
-		detail := "Request body is required"
-		return &server.ApplyVMdefaultApplicationProblemPlusJSONResponse{
-			Body: server.Error{
-				Title:  title,
-				Type:   typ,
-				Status: &status,
-				Detail: &detail,
-			},
-			StatusCode: status,
-		}, nil
-	}
-
-	vmSpec := request.Body
-
-	// Convert VM ID to name
-	vmName := s.vmIDToName(request.VmId)
-
-	// Check if VM exists
-	existingVM, err := s.kubevirtClient.GetVirtualMachine(ctx, vmName)
-	if err != nil && !kubevirt.IsNotFoundError(err) {
-		// Error other than "not found"
-		return kubevirt.MapKubernetesErrorForApply(err), nil
-	}
-
-	// Convert VMSpec to KubeVirt VirtualMachine
-	catalogVMSpec := serverVMToVMSpec(vmSpec)
-	virtualMachine, err := s.mapper.VMSpecToVirtualMachine(catalogVMSpec, vmName, request.VmId.String())
-	if err != nil {
-		status := 422
-		title := "Validation Error"
-		typ := "about:blank"
-		detail := fmt.Sprintf("Failed to convert VMSpec to VirtualMachine: %v", err)
-		return &server.ApplyVMdefaultApplicationProblemPlusJSONResponse{
-			Body: server.Error{
-				Title:  title,
-				Type:   typ,
-				Status: &status,
-				Detail: &detail,
-			},
-			StatusCode: status,
-		}, nil
-	}
-
-	if existingVM != nil {
-		// VM exists, update it
-		updatedVM, err := s.kubevirtClient.UpdateVirtualMachine(ctx, virtualMachine)
-		if err != nil {
-			return kubevirt.MapKubernetesErrorForApply(err), nil
-		}
-
-		// Successfully updated VM, return 200
-		if updatedVM != nil {
-			return server.ApplyVM200JSONResponse(*vmSpec), nil
-		}
-	} else {
-		// VM doesn't exist, create it
-		createdVM, err := s.kubevirtClient.CreateVirtualMachine(ctx, virtualMachine)
-		if err != nil {
-			return kubevirt.MapKubernetesErrorForApply(err), nil
-		}
-
-		// Successfully created VM, return 200
-		if createdVM != nil {
-			return server.ApplyVM200JSONResponse(*vmSpec), nil
-		}
-	}
-
-	// Fallback error
-	status := 500
-	title := "Internal Server Error"
+	// Return not implemented
+	status := 501
+	title := "Not Implemented"
 	typ := "about:blank"
-	detail := "Failed to apply virtual machine"
-	return &server.ApplyVMdefaultApplicationProblemPlusJSONResponse{
-		Body: server.Error{
-			Title:  title,
-			Type:   typ,
-			Status: &status,
-			Detail: &detail,
-		},
-		StatusCode: status,
+	detail := "Applying VMs is not implemented"
+	return server.ApplyVM400ApplicationProblemPlusJSONResponse{
+		Title:  title,
+		Type:   typ,
+		Status: &status,
+		Detail: &detail,
 	}, nil
 }
 

@@ -11,8 +11,10 @@ import (
 	"github.com/dcm-project/kubevirt-service-provider/api/v1alpha1"
 	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
 	"github.com/dcm-project/kubevirt-service-provider/internal/config"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 )
 
 const gracefulShutdownTimeout = 5 * time.Second
@@ -45,6 +47,17 @@ func (s *Server) Run(ctx context.Context) error {
 	if len(swagger.Servers) > 0 {
 		baseURL = swagger.Servers[0].URL
 	}
+
+	// Create a copy of the swagger spec for validation that preserves server context
+	validationSwagger := *swagger
+
+	// Add OpenAPI request validation middleware with server context
+	router.Use(nethttpmiddleware.OapiRequestValidatorWithOptions(&validationSwagger, &nethttpmiddleware.Options{
+		Options: openapi3filter.Options{
+			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+		},
+		SilenceServersWarning: true,
+	}))
 
 	server.HandlerFromMuxWithBaseURL(
 		server.NewStrictHandler(s.handler, nil),

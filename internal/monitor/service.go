@@ -12,6 +12,8 @@ import (
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/dcm-project/kubevirt-service-provider/internal/constants"
 	"github.com/dcm-project/kubevirt-service-provider/internal/events"
 )
@@ -62,7 +64,9 @@ func NewMonitorService(dynamicClient dynamic.Interface, publisher *events.Publis
 		dynamicClient,
 		config.ResyncPeriod,
 		config.Namespace,
-		nil, // No label selector filtering
+		func(options *metav1.ListOptions) {
+			options.LabelSelector = fmt.Sprintf("%s=%s", constants.DCMLabelManagedBy, constants.DCMManagedByValue)
+		},
 	)
 
 	// Setup informers
@@ -82,9 +86,6 @@ func (s *Service) setupInformers() {
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			s.handleVMEvent(newObj, "updated")
 		},
-		DeleteFunc: func(obj interface{}) {
-			s.handleVMEvent(obj, "deleted")
-		},
 	})
 
 	// Setup VirtualMachineInstance informer
@@ -95,9 +96,6 @@ func (s *Service) setupInformers() {
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			s.handleVMEvent(newObj, "updated")
-		},
-		DeleteFunc: func(obj interface{}) {
-			s.handleVMEvent(obj, "deleted")
 		},
 	})
 }
@@ -127,33 +125,9 @@ func (s *Service) Run(ctx context.Context) error {
 // handleVMEvent handles any VM/VMI event by publishing current state
 func (s *Service) handleVMEvent(obj interface{}, eventType string) {
 	var vm *unstructured.Unstructured
-	var ok bool
-
-	// Handle potential DeletedFinalStateUnknown for delete events
-	if eventType == "deleted" {
-		if deletedState, isDeleted := obj.(cache.DeletedFinalStateUnknown); isDeleted {
-			vm, ok = deletedState.Obj.(*unstructured.Unstructured)
-			if !ok {
-				log.Printf("Warning: handleVMEvent received unknown deleted object type")
-				return
-			}
-		} else {
-			vm, ok = obj.(*unstructured.Unstructured)
-			if !ok {
-				log.Printf("Warning: handleVMEvent received non-unstructured object")
-				return
-			}
-		}
-	} else {
-		vm, ok = obj.(*unstructured.Unstructured)
-		if !ok {
-			log.Printf("Warning: handleVMEvent received non-unstructured object")
-			return
-		}
-	}
-
-	// Only process VMs managed by DCM
-	if !s.isDCMManagedVM(vm) {
+	vm, ok := obj.(*unstructured.Unstructured)
+	if !ok {
+		log.Printf("Warning: handleVMEvent received non-unstructured object")
 		return
 	}
 
@@ -165,11 +139,6 @@ func (s *Service) handleVMEvent(obj interface{}, eventType string) {
 	}
 
 	log.Printf("VM %s: %s (ID: %s) with phase %s", eventType, vmInfo.VMName, vmInfo.VMID, vmInfo.Phase)
-
-	// For delete events, set phase to stopped
-	if eventType == "deleted" {
-		vmInfo.Phase = VMPhaseStopped
-	}
 
 	// Publish current VM state
 	s.publishVMEvent(vmInfo)

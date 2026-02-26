@@ -282,7 +282,7 @@ components:
           readOnly: true
 
     VM:
-      description: Virtual Machine defined by catalog manager VMSpec
+      description: Virtual Machine with path
       x-aep-resource:
         type: serviceprovider.dcm.io/vm
         singular: vm
@@ -290,10 +290,6 @@ components:
         patterns:
           - vms/{vm_id}
       properties:
-        id:
-          type: string
-          description: ID of the VM
-          example: "123e4567-e89b-12d3-a456-426614174000"
         path:
           type: string
           readOnly: true
@@ -301,6 +297,13 @@ components:
           example: "vms/123e4567-e89b-12d3-a456-426614174000"
       allOf:
         - $ref: 'https://raw.githubusercontent.com/dcm-project/catalog-manager/refs/heads/main/api/v1alpha1/servicetypes/vm/spec.yaml#/components/schemas/VMSpec'
+        - type: object
+          properties:
+            path:
+              type: string
+              readOnly: true
+              description: Resource path identifier
+              example: "vms/123e4567-e89b-12d3-a456-426614174000"
 
     VMList:
       type: object

@@ -80,7 +80,7 @@ func (p *Publisher) connect() error {
 // PublishVMEvent publishes a VM phase change event to NATS
 func (p *Publisher) PublishVMEvent(ctx context.Context, vmEvent VMEvent) error {
 	// Check if connected
-	if p.natsConn == nil || !p.natsConn.IsConnected() {
+	if !p.IsConnected() {
 		return fmt.Errorf("NATS connection not available")
 	}
 

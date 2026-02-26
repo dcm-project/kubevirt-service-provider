@@ -2,3 +2,6 @@
 bin
 vendor
 kubevirt-service-provider
+
+# Generated files - do not commit
+api/v1alpha1/openapi.yaml

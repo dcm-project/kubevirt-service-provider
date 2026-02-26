@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
-	catalogv1alpha1 "github.com/dcm-project/catalog-manager/api/v1alpha1/servicetypes/vm"
+	types "github.com/dcm-project/kubevirt-service-provider/api/v1alpha1"
 	"github.com/dcm-project/kubevirt-service-provider/internal/constants"
 )
 
@@ -25,7 +25,7 @@ func NewMapper(namespace string) *Mapper {
 }
 
 // VMSpecToVirtualMachine converts a DCM VMSpec to a KubeVirt VirtualMachine unstructured object
-func (m *Mapper) VMSpecToVirtualMachine(vmSpec *catalogv1alpha1.VMSpec, vmName string, vmID string) (*unstructured.Unstructured, error) {
+func (m *Mapper) VMSpecToVirtualMachine(vmSpec *types.VMSpec, vmName string, vmID string) (*unstructured.Unstructured, error) {
 	vm := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "kubevirt.io/v1",
@@ -34,7 +34,7 @@ func (m *Mapper) VMSpecToVirtualMachine(vmSpec *catalogv1alpha1.VMSpec, vmName s
 				"name":      vmName,
 				"namespace": m.namespace,
 				"labels": map[string]interface{}{
-					constants.DCMLabelManagedBy:   constants.DCMManagedByValue,
+					constants.DCMLabelManagedBy:  constants.DCMManagedByValue,
 					constants.DCMLabelInstanceID: vmID,
 				},
 			},
@@ -47,7 +47,7 @@ func (m *Mapper) VMSpecToVirtualMachine(vmSpec *catalogv1alpha1.VMSpec, vmName s
 		"template": map[string]interface{}{
 			"metadata": map[string]interface{}{
 				"labels": map[string]interface{}{
-					constants.DCMLabelManagedBy:   constants.DCMManagedByValue,
+					constants.DCMLabelManagedBy:  constants.DCMManagedByValue,
 					constants.DCMLabelInstanceID: vmID,
 				},
 			},
@@ -69,7 +69,7 @@ func (m *Mapper) VMSpecToVirtualMachine(vmSpec *catalogv1alpha1.VMSpec, vmName s
 }
 
 // buildDomainSpec creates the domain specification for the VM
-func (m *Mapper) buildDomainSpec(vmSpec *catalogv1alpha1.VMSpec) map[string]interface{} {
+func (m *Mapper) buildDomainSpec(vmSpec *types.VMSpec) map[string]interface{} {
 	domain := map[string]interface{}{
 		"devices": map[string]interface{}{
 			"disks":      m.buildDisks(vmSpec),
@@ -87,7 +87,7 @@ func (m *Mapper) buildDomainSpec(vmSpec *catalogv1alpha1.VMSpec) map[string]inte
 }
 
 // buildResources creates the resource specification
-func (m *Mapper) buildResources(vmSpec *catalogv1alpha1.VMSpec) map[string]interface{} {
+func (m *Mapper) buildResources(vmSpec *types.VMSpec) map[string]interface{} {
 	resources := map[string]interface{}{
 		"requests": map[string]interface{}{},
 	}
@@ -108,7 +108,7 @@ func (m *Mapper) buildResources(vmSpec *catalogv1alpha1.VMSpec) map[string]inter
 }
 
 // buildDisks creates the disk specifications
-func (m *Mapper) buildDisks(vmSpec *catalogv1alpha1.VMSpec) []interface{} {
+func (m *Mapper) buildDisks(vmSpec *types.VMSpec) []interface{} {
 	disks := []interface{}{}
 
 	// Create disk entries for each storage disk
@@ -143,7 +143,7 @@ func (m *Mapper) buildDisks(vmSpec *catalogv1alpha1.VMSpec) []interface{} {
 }
 
 // buildVolumes creates the volume specifications
-func (m *Mapper) buildVolumes(vmSpec *catalogv1alpha1.VMSpec) []interface{} {
+func (m *Mapper) buildVolumes(vmSpec *types.VMSpec) []interface{} {
 	volumes := []interface{}{}
 
 	for i, disk := range vmSpec.Storage.Disks {
@@ -154,7 +154,7 @@ func (m *Mapper) buildVolumes(vmSpec *catalogv1alpha1.VMSpec) []interface{} {
 
 		// For boot disk, use container disk for OS images
 		if i == 0 || disk.Name == "boot" {
-			containerDiskImage := m.getContainerDiskImage(vmSpec.GuestOS)
+			containerDiskImage := m.getContainerDiskImage(vmSpec.GuestOs)
 			volumeSpec["containerDisk"] = map[string]interface{}{
 				"image": containerDiskImage,
 			}
@@ -172,7 +172,7 @@ func (m *Mapper) buildVolumes(vmSpec *catalogv1alpha1.VMSpec) []interface{} {
 
 	// If no volumes defined, create a default boot volume
 	if len(volumes) == 0 {
-		containerDiskImage := m.getContainerDiskImage(vmSpec.GuestOS)
+		containerDiskImage := m.getContainerDiskImage(vmSpec.GuestOs)
 		volumes = append(volumes, map[string]interface{}{
 			"name": "boot",
 			"containerDisk": map[string]interface{}{
@@ -208,7 +208,7 @@ func (m *Mapper) buildInterfaces() []interface{} {
 }
 
 // getContainerDiskImage maps guest OS to container disk image
-func (m *Mapper) getContainerDiskImage(guestOS catalogv1alpha1.GuestOS) string {
+func (m *Mapper) getContainerDiskImage(guestOS types.GuestOS) string {
 	// Map common OS types to container disk images
 	switch strings.ToLower(guestOS.Type) {
 	case "ubuntu":
@@ -271,22 +271,16 @@ func (m *Mapper) parseMemorySize(sizeStr string) (string, error) {
 	return "", fmt.Errorf("unable to parse memory size: %s", sizeStr)
 }
 
-// parseStorageSize converts storage size string to Kubernetes resource format
-func (m *Mapper) parseStorageSize(sizeStr string) (string, error) {
-	// Similar to parseMemorySize but for storage
-	return m.parseMemorySize(sizeStr)
-}
-
 // VirtualMachineToVMSpec converts a KubeVirt VirtualMachine back to DCM VMSpec format
-func (m *Mapper) VirtualMachineToVMSpec(vm *unstructured.Unstructured) (*catalogv1alpha1.VMSpec, error) {
+func (m *Mapper) VirtualMachineToVMSpec(vm *unstructured.Unstructured) (*types.VMSpec, error) {
 	// Build VMSpec from VirtualMachine data
-	vmSpec := &catalogv1alpha1.VMSpec{}
+	vmSpec := &types.VMSpec{}
 
 	// Extract CPU information
 	cpu, found, err := unstructured.NestedString(vm.Object, "spec", "template", "spec", "domain", "resources", "requests", "cpu")
 	if err == nil && found {
 		if cpuCount, parseErr := strconv.Atoi(cpu); parseErr == nil {
-			vmSpec.Vcpu = catalogv1alpha1.Vcpu{
+			vmSpec.Vcpu = types.Vcpu{
 				Count: cpuCount,
 			}
 		}
@@ -294,18 +288,18 @@ func (m *Mapper) VirtualMachineToVMSpec(vm *unstructured.Unstructured) (*catalog
 
 	// If CPU not found, use default
 	if vmSpec.Vcpu.Count == 0 {
-		vmSpec.Vcpu = catalogv1alpha1.Vcpu{Count: 1}
+		vmSpec.Vcpu = types.Vcpu{Count: 1}
 	}
 
 	// Extract memory information
 	memory, found, err := unstructured.NestedString(vm.Object, "spec", "template", "spec", "domain", "resources", "requests", "memory")
 	if err == nil && found {
-		vmSpec.Memory = catalogv1alpha1.Memory{
+		vmSpec.Memory = types.Memory{
 			Size: memory,
 		}
 	} else {
 		// Default memory
-		vmSpec.Memory = catalogv1alpha1.Memory{Size: "1Gi"}
+		vmSpec.Memory = types.Memory{Size: "1Gi"}
 	}
 
 	// Extract guest OS from container disk image (best effort)
@@ -325,19 +319,19 @@ func (m *Mapper) VirtualMachineToVMSpec(vm *unstructured.Unstructured) (*catalog
 		}
 	}
 
-	vmSpec.GuestOS = catalogv1alpha1.GuestOS{
+	vmSpec.GuestOs = types.GuestOS{
 		Type: guestOS,
 	}
 
 	// Extract disk information
-	disks := []catalogv1alpha1.Disk{}
+	disks := []types.Disk{}
 	diskSpecs, found, err := unstructured.NestedSlice(vm.Object, "spec", "template", "spec", "domain", "devices", "disks")
 	if err == nil && found {
 		for _, diskInterface := range diskSpecs {
 			if disk, ok := diskInterface.(map[string]interface{}); ok {
 				if name, found := disk["name"]; found {
 					if nameStr, ok := name.(string); ok {
-						disks = append(disks, catalogv1alpha1.Disk{
+						disks = append(disks, types.Disk{
 							Name: nameStr,
 						})
 					}
@@ -348,12 +342,12 @@ func (m *Mapper) VirtualMachineToVMSpec(vm *unstructured.Unstructured) (*catalog
 
 	// If no disks found, create default boot disk
 	if len(disks) == 0 {
-		disks = append(disks, catalogv1alpha1.Disk{
+		disks = append(disks, types.Disk{
 			Name: "boot",
 		})
 	}
 
-	vmSpec.Storage = catalogv1alpha1.Storage{
+	vmSpec.Storage = types.Storage{
 		Disks: disks,
 	}
 
