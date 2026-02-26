@@ -34,5 +34,9 @@ This command will:
 
 ```bash
 make build
-```
 
+
+### Example call
+```
+curl -XPOST --data '{"vcpu": {"count": 1}, "memory": {"size": "1GB"}, "storage": {"disks": [{"name": "x", "capacity": "1GB"}]}, "guest_os": {"type": ""}, "metadata": {"name": "x"}, "service_type": "vm"}' -H 'Content-type: application/json'  http://localhost:8081/api/v1alpha1/vms
+```

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/google/uuid"
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -48,12 +47,13 @@ func unstructuredVMToServerVM(s *KubevirtHandler, vm *unstructured.Unstructured)
 		return nil, err
 	}
 	var path *string
+	var vmID string
 	labels, _, _ := unstructured.NestedStringMap(vm.Object, "spec", "template", "metadata", "labels")
 	if vmID, ok := labels[constants.DCMLabelInstanceID]; ok && vmID != "" {
 		p := fmt.Sprintf("%svms/%s", ApiPrefix, vmID)
 		path = &p
 	}
-	return vmSpecToServerVM(vmSpec, path), nil
+	return vmSpecToServerVM(vmSpec, path, vmID), nil
 }
 
 // (GET /health)
@@ -91,25 +91,11 @@ func (s *KubevirtHandler) ListVMs(ctx context.Context, request server.ListVMsReq
 // (POST /vms)
 func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMRequestObject) (server.CreateVMResponseObject, error) {
 	vmSpec := request.Body
-
-	// Generate VM name and ID
-	var vmID string
-	var vmName string
-
-	// Use provided ID if available for idempotent creation
-	if request.Params.Id != nil {
-		vmID = request.Params.Id.String()
-		vmName = fmt.Sprintf("vm-%s", strings.ReplaceAll(vmID, "-", "")[:8])
-	} else {
-		// Generate new UUID
-		generatedID := uuid.New()
-		vmID = generatedID.String()
-		vmName = fmt.Sprintf("vm-%s", strings.ReplaceAll(vmID, "-", "")[:8])
-	}
+	vmID := request.Params.Id.String()
 	path := fmt.Sprintf("%svms/%s", ApiPrefix, vmID)
 
 	// Check for existing VM (idempotency support)
-	existingVM, err := s.kubevirtClient.GetVirtualMachine(ctx, vmName)
+	existingVM, err := s.kubevirtClient.GetVirtualMachine(ctx, vmID)
 	if err == nil && existingVM != nil {
 		// VM already exists: derive ID from labels and ensure response reflects stored state
 		existingVMID := s.extractVMIDFromVM(existingVM)
@@ -123,7 +109,7 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 			status := 409
 			title := "Conflict"
 			typ := "about:blank"
-			detail := fmt.Sprintf("Virtual machine name collision detected for %s", vmName)
+			detail := fmt.Sprintf("Virtual machine name collision detected for %s", vmID)
 			return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
 				Body: server.Error{
 					Title:  title,
@@ -146,7 +132,7 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 		}
 
 		// Ensure the spec has the effective ID and path
-		serverVM := vmSpecToServerVM(vmSpec, &path)
+		serverVM := vmSpecToServerVM(vmSpec, &path, vmID)
 
 		// Return 201 Created for existing VM (idempotent create)
 		// Note: OpenAPI spec only defines 201 response, ideally would be 200 for existing resources
@@ -159,7 +145,7 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 
 	// Convert VMSpec to KubeVirt VirtualMachine
 	catalogVMSpec := createVMRequestToVMSpec(vmSpec)
-	virtualMachine, err := s.mapper.VMSpecToVirtualMachine(catalogVMSpec, vmName, vmID)
+	virtualMachine, err := s.mapper.VMSpecToVirtualMachine(catalogVMSpec, vmID)
 	if err != nil {
 		status := 422
 		title := "Validation Error"
@@ -202,11 +188,8 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 
 // (DELETE /vms/{vmId})
 func (s *KubevirtHandler) DeleteVM(ctx context.Context, request server.DeleteVMRequestObject) (server.DeleteVMResponseObject, error) {
-	// Convert VM ID to name
-	vmName := s.vmIDToName(request.VmId)
-
 	// Check if VM exists
-	_, err := s.kubevirtClient.GetVirtualMachine(ctx, vmName)
+	_, err := s.kubevirtClient.GetVirtualMachine(ctx, request.VmId.String())
 	if err != nil {
 		if kubevirt.IsNotFoundError(err) {
 			// VM not found, return 404
@@ -226,7 +209,7 @@ func (s *KubevirtHandler) DeleteVM(ctx context.Context, request server.DeleteVMR
 	}
 
 	// Delete the VM
-	err = s.kubevirtClient.DeleteVirtualMachine(ctx, vmName)
+	err = s.kubevirtClient.DeleteVirtualMachine(ctx, request.VmId.String())
 	if err != nil {
 		return kubevirt.MapKubernetesErrorForDelete(err), nil
 	}
@@ -273,7 +256,7 @@ func (s *KubevirtHandler) GetVM(ctx context.Context, request server.GetVMRequest
 	// Convert VMSpec back to server VM and return
 	vmID := request.VmId.String()
 	path := fmt.Sprintf("%svms/%s", ApiPrefix, vmID)
-	serverVM := vmSpecToServerVM(vmSpec, &path)
+	serverVM := vmSpecToServerVM(vmSpec, &path, vmID)
 	return server.GetVM200JSONResponse(*serverVM), nil
 }
 

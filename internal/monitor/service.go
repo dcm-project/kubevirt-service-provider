@@ -24,19 +24,11 @@ type Service struct {
 	namespace       string
 	publisher       *events.Publisher
 	informerFactory dynamicinformer.DynamicSharedInformerFactory
-	vmInformer      cache.SharedIndexInformer
 	vmiInformer     cache.SharedIndexInformer
 	resyncPeriod    time.Duration
 }
 
 var (
-	// KubeVirt resource definitions
-	virtualMachineGVR = schema.GroupVersionResource{
-		Group:    "kubevirt.io",
-		Version:  "v1",
-		Resource: "virtualmachines",
-	}
-
 	virtualMachineInstanceGVR = schema.GroupVersionResource{
 		Group:    "kubevirt.io",
 		Version:  "v1",
@@ -77,17 +69,6 @@ func NewMonitorService(dynamicClient dynamic.Interface, publisher *events.Publis
 
 // setupInformers configures the VM and VMI informers
 func (s *Service) setupInformers() {
-	// Setup VirtualMachine informer
-	s.vmInformer = s.informerFactory.ForResource(virtualMachineGVR).Informer()
-	s.vmInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			s.handleVMEvent(obj, "created")
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			s.handleVMEvent(newObj, "updated")
-		},
-	})
-
 	// Setup VirtualMachineInstance informer
 	s.vmiInformer = s.informerFactory.ForResource(virtualMachineInstanceGVR).Informer()
 	s.vmiInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
@@ -109,7 +90,7 @@ func (s *Service) Run(ctx context.Context) error {
 
 	// Wait for cache sync
 	log.Printf("Waiting for informer caches to sync...")
-	if !cache.WaitForCacheSync(ctx.Done(), s.vmInformer.HasSynced, s.vmiInformer.HasSynced) {
+	if !cache.WaitForCacheSync(ctx.Done(), s.vmiInformer.HasSynced) {
 		return fmt.Errorf("failed to sync informer caches")
 	}
 
@@ -162,21 +143,9 @@ func (s *Service) publishVMEvent(vmInfo VMInfo) {
 	}
 }
 
-// isDCMManagedVM checks if a VM is managed by DCM
-func (s *Service) isDCMManagedVM(obj *unstructured.Unstructured) bool {
-	labels := obj.GetLabels()
-	if labels == nil {
-		return false
-	}
-
-	managedBy, found := labels[constants.DCMLabelManagedBy]
-	return found && managedBy == constants.DCMManagedByValue
-}
-
 // GetStats returns monitoring service statistics
 func (s *Service) GetStats() map[string]interface{} {
 	stats := make(map[string]interface{})
-	stats["vm_informer_synced"] = s.vmInformer.HasSynced()
 	stats["vmi_informer_synced"] = s.vmiInformer.HasSynced()
 	stats["publisher_connected"] = s.publisher.IsConnected()
 

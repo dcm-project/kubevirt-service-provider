@@ -159,44 +159,21 @@ type Storage struct {
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
-// VM defines model for VM.
+// VM Virtual Machine
 type VM struct {
-	// Access VM access configuration
-	Access *Access `json:"access,omitempty"`
-
-	// GuestOs Guest operating system configuration.
-	// Providers map the OS type to their image catalog.
-	GuestOs GuestOS `json:"guest_os"`
-
-	// Memory Memory configuration (RAM)
-	Memory Memory `json:"memory"`
-
-	// Metadata Resource metadata for identification and governance.
-	// Used by all service type specifications.
-	Metadata ServiceMetadata `json:"metadata"`
+	// Id Unique identifier of the VM
+	Id openapi_types.UUID `json:"id"`
 
 	// Path Resource path identifier
 	Path *string `json:"path,omitempty"`
 
-	// ProviderHints Optional provider-specific configuration.
+	// VmSpec Provider-agnostic virtual machine specification.
 	//
-	// Allows platform-specific settings without breaking portability.
-	// Providers use hints they recognize and ignore unknown hints.
+	// Includes common fields (service_type, metadata, provider_hints)
+	// plus VM-specific fields for compute, storage, and operating system.
 	//
-	// Keys are provider identifiers (e.g., kubevirt, vmware, aws).
-	// Values are provider-specific configuration objects.
-	ProviderHints *ProviderHints `json:"provider_hints,omitempty"`
-
-	// ServiceType Service type identifier.
-	// Makes the payload self-describing and enables routing/validation.
-	ServiceType ServiceType `json:"service_type"`
-
-	// Storage Storage configuration
-	Storage Storage `json:"storage"`
-
-	// Vcpu Virtual CPU configuration
-	Vcpu                 Vcpu                   `json:"vcpu"`
-	AdditionalProperties map[string]interface{} `json:"-"`
+	// Providers translate this abstract specification to their native format.
+	VmSpec VMSpec `json:"vm_spec"`
 }
 
 // VMList Paginated list of VMs
@@ -608,182 +585,6 @@ func (a Storage) MarshalJSON() ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'disks': %w", err)
 		}
-	}
-
-	for fieldName, field := range a.AdditionalProperties {
-		object[fieldName], err = json.Marshal(field)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
-		}
-	}
-	return json.Marshal(object)
-}
-
-// Getter for additional properties for VM. Returns the specified
-// element and whether it was found
-func (a VM) Get(fieldName string) (value interface{}, found bool) {
-	if a.AdditionalProperties != nil {
-		value, found = a.AdditionalProperties[fieldName]
-	}
-	return
-}
-
-// Setter for additional properties for VM
-func (a *VM) Set(fieldName string, value interface{}) {
-	if a.AdditionalProperties == nil {
-		a.AdditionalProperties = make(map[string]interface{})
-	}
-	a.AdditionalProperties[fieldName] = value
-}
-
-// Override default JSON handling for VM to handle AdditionalProperties
-func (a *VM) UnmarshalJSON(b []byte) error {
-	object := make(map[string]json.RawMessage)
-	err := json.Unmarshal(b, &object)
-	if err != nil {
-		return err
-	}
-
-	if raw, found := object["access"]; found {
-		err = json.Unmarshal(raw, &a.Access)
-		if err != nil {
-			return fmt.Errorf("error reading 'access': %w", err)
-		}
-		delete(object, "access")
-	}
-
-	if raw, found := object["guest_os"]; found {
-		err = json.Unmarshal(raw, &a.GuestOs)
-		if err != nil {
-			return fmt.Errorf("error reading 'guest_os': %w", err)
-		}
-		delete(object, "guest_os")
-	}
-
-	if raw, found := object["memory"]; found {
-		err = json.Unmarshal(raw, &a.Memory)
-		if err != nil {
-			return fmt.Errorf("error reading 'memory': %w", err)
-		}
-		delete(object, "memory")
-	}
-
-	if raw, found := object["metadata"]; found {
-		err = json.Unmarshal(raw, &a.Metadata)
-		if err != nil {
-			return fmt.Errorf("error reading 'metadata': %w", err)
-		}
-		delete(object, "metadata")
-	}
-
-	if raw, found := object["path"]; found {
-		err = json.Unmarshal(raw, &a.Path)
-		if err != nil {
-			return fmt.Errorf("error reading 'path': %w", err)
-		}
-		delete(object, "path")
-	}
-
-	if raw, found := object["provider_hints"]; found {
-		err = json.Unmarshal(raw, &a.ProviderHints)
-		if err != nil {
-			return fmt.Errorf("error reading 'provider_hints': %w", err)
-		}
-		delete(object, "provider_hints")
-	}
-
-	if raw, found := object["service_type"]; found {
-		err = json.Unmarshal(raw, &a.ServiceType)
-		if err != nil {
-			return fmt.Errorf("error reading 'service_type': %w", err)
-		}
-		delete(object, "service_type")
-	}
-
-	if raw, found := object["storage"]; found {
-		err = json.Unmarshal(raw, &a.Storage)
-		if err != nil {
-			return fmt.Errorf("error reading 'storage': %w", err)
-		}
-		delete(object, "storage")
-	}
-
-	if raw, found := object["vcpu"]; found {
-		err = json.Unmarshal(raw, &a.Vcpu)
-		if err != nil {
-			return fmt.Errorf("error reading 'vcpu': %w", err)
-		}
-		delete(object, "vcpu")
-	}
-
-	if len(object) != 0 {
-		a.AdditionalProperties = make(map[string]interface{})
-		for fieldName, fieldBuf := range object {
-			var fieldVal interface{}
-			err := json.Unmarshal(fieldBuf, &fieldVal)
-			if err != nil {
-				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
-			}
-			a.AdditionalProperties[fieldName] = fieldVal
-		}
-	}
-	return nil
-}
-
-// Override default JSON handling for VM to handle AdditionalProperties
-func (a VM) MarshalJSON() ([]byte, error) {
-	var err error
-	object := make(map[string]json.RawMessage)
-
-	if a.Access != nil {
-		object["access"], err = json.Marshal(a.Access)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'access': %w", err)
-		}
-	}
-
-	object["guest_os"], err = json.Marshal(a.GuestOs)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'guest_os': %w", err)
-	}
-
-	object["memory"], err = json.Marshal(a.Memory)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'memory': %w", err)
-	}
-
-	object["metadata"], err = json.Marshal(a.Metadata)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'metadata': %w", err)
-	}
-
-	if a.Path != nil {
-		object["path"], err = json.Marshal(a.Path)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'path': %w", err)
-		}
-	}
-
-	if a.ProviderHints != nil {
-		object["provider_hints"], err = json.Marshal(a.ProviderHints)
-		if err != nil {
-			return nil, fmt.Errorf("error marshaling 'provider_hints': %w", err)
-		}
-	}
-
-	object["service_type"], err = json.Marshal(a.ServiceType)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'service_type': %w", err)
-	}
-
-	object["storage"], err = json.Marshal(a.Storage)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'storage': %w", err)
-	}
-
-	object["vcpu"], err = json.Marshal(a.Vcpu)
-	if err != nil {
-		return nil, fmt.Errorf("error marshaling 'vcpu': %w", err)
 	}
 
 	for fieldName, field := range a.AdditionalProperties {

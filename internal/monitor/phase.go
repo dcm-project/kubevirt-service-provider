@@ -89,68 +89,11 @@ func extractPhase(obj *unstructured.Unstructured) (VMPhase, error) {
 	kind := obj.GetKind()
 
 	switch kind {
-	case "VirtualMachine":
-		return extractVMPhase(obj)
 	case "VirtualMachineInstance":
 		return extractVMIPhase(obj)
 	default:
 		return VMPhaseUnknown, fmt.Errorf("unsupported object kind: %s", kind)
 	}
-}
-
-// extractVMPhase extracts phase from VirtualMachine status
-func extractVMPhase(vm *unstructured.Unstructured) (VMPhase, error) {
-	// Check if VM is running (spec.running)
-	running, found, err := unstructured.NestedBool(vm.Object, "spec", "running")
-	if err != nil {
-		return VMPhaseUnknown, fmt.Errorf("failed to get spec.running: %w", err)
-	}
-	if !found {
-		running = true // Default to running if not specified
-	}
-
-	// If spec.running is false, VM is stopped
-	if !running {
-		return VMPhaseStopped, nil
-	}
-
-	// Check status.ready
-	ready, found, err := unstructured.NestedBool(vm.Object, "status", "ready")
-	if err != nil {
-		log.Printf("Warning: failed to get status.ready: %v", err)
-	}
-	if found && ready {
-		return VMPhaseRunning, nil
-	}
-
-	// Check status.created
-	created, found, err := unstructured.NestedBool(vm.Object, "status", "created")
-	if err != nil {
-		log.Printf("Warning: failed to get status.created: %v", err)
-	}
-	if found && !created {
-		return VMPhasePending, nil
-	}
-
-	// Check status.conditions for more detailed state
-	conditions, found, err := unstructured.NestedSlice(vm.Object, "status", "conditions")
-	if err != nil {
-		log.Printf("Warning: failed to get status.conditions: %v", err)
-	}
-	if found {
-		phase := analyzeVMConditions(conditions)
-		if phase != VMPhaseUnknown {
-			return phase, nil
-		}
-	}
-
-	// If VM is running but not ready yet, it's likely pending/starting
-	if running && (!found || !ready) {
-		return VMPhasePending, nil
-	}
-
-	// Default case
-	return VMPhaseUnknown, nil
 }
 
 // extractVMIPhase extracts phase from VirtualMachineInstance status
@@ -184,61 +127,4 @@ func extractVMIPhase(vmi *unstructured.Unstructured) (VMPhase, error) {
 		log.Printf("Warning: Unknown VMI phase '%s', mapping to Unknown", phase)
 		return VMPhaseUnknown, nil
 	}
-}
-
-// analyzeVMConditions analyzes VM conditions to determine phase
-func analyzeVMConditions(conditions []interface{}) VMPhase {
-	hasFailure := false
-	hasReady := false
-
-	for _, condInterface := range conditions {
-		condition, ok := condInterface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		condType, found := condition["type"]
-		if !found {
-			continue
-		}
-
-		status, found := condition["status"]
-		if !found {
-			continue
-		}
-
-		typeStr, ok := condType.(string)
-		if !ok {
-			continue
-		}
-
-		statusStr, ok := status.(string)
-		if !ok {
-			continue
-		}
-
-		switch typeStr {
-		case "Ready":
-			if statusStr == "True" {
-				hasReady = true
-			}
-		case "Failure", "Failed":
-			if statusStr == "True" {
-				hasFailure = true
-			}
-		case "Paused":
-			if statusStr == "True" {
-				return VMPhaseStopped // Treat paused as stopped
-			}
-		}
-	}
-
-	if hasFailure {
-		return VMPhaseFailed
-	}
-	if hasReady {
-		return VMPhaseRunning
-	}
-
-	return VMPhaseUnknown
 }

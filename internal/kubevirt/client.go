@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/dcm-project/kubevirt-service-provider/internal/config"
+	"github.com/dcm-project/kubevirt-service-provider/internal/constants"
 )
 
 // Client wraps the Kubernetes dynamic client for KubeVirt operations
@@ -63,7 +64,10 @@ func NewClient(cfg *config.KubernetesConfig) (*Client, error) {
 		dynamicClient,
 		30*time.Minute, // Default resync period
 		cfg.Namespace,
-		nil, // No label selector filtering
+		// DCM Label Selector Filtering
+		func(options *metav1.ListOptions) {
+			options.LabelSelector = fmt.Sprintf("%s=%s", constants.DCMLabelManagedBy, constants.DCMManagedByValue)
+		},
 	)
 
 	return &Client{
@@ -80,35 +84,29 @@ func (c *Client) CreateVirtualMachine(ctx context.Context, vm *unstructured.Unst
 	timeoutCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	var lastErr error
-	for attempt := 0; attempt <= c.maxRetries; attempt++ {
-		createdVM, err := c.dynamicClient.Resource(virtualMachineGVR).Namespace(c.namespace).Create(timeoutCtx, vm, metav1.CreateOptions{})
-		if err == nil {
-			return createdVM, nil
-		}
-		lastErr = err
-
-		if attempt < c.maxRetries {
-			// Wait before retrying (exponential backoff)
-			backoff := time.Duration(attempt+1) * time.Second
-			select {
-			case <-time.After(backoff):
-				continue
-			case <-timeoutCtx.Done():
-				return nil, timeoutCtx.Err()
-			}
-		}
+	createdVM, err := c.dynamicClient.Resource(virtualMachineGVR).Namespace(c.namespace).Create(timeoutCtx, vm, metav1.CreateOptions{})
+	if err == nil {
+		return createdVM, nil
 	}
-
-	return nil, fmt.Errorf("failed to create VirtualMachine after %d retries: %w", c.maxRetries, lastErr)
+	return nil, fmt.Errorf("failed to create VirtualMachine after %d retries: %w", c.maxRetries, err)
 }
 
 // GetVirtualMachine retrieves a VirtualMachine by name
-func (c *Client) GetVirtualMachine(ctx context.Context, name string) (*unstructured.Unstructured, error) {
+func (c *Client) GetVirtualMachine(ctx context.Context, vmID string) (*unstructured.Unstructured, error) {
 	timeoutCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	return c.dynamicClient.Resource(virtualMachineGVR).Namespace(c.namespace).Get(timeoutCtx, name, metav1.GetOptions{})
+	vmList, err := c.dynamicClient.Resource(virtualMachineGVR).Namespace(c.namespace).List(timeoutCtx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", constants.DCMLabelInstanceID, vmID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get VirtualMachine by dcmlabelinstanceid: %w", err)
+	}
+	if len(vmList.Items) == 0 {
+		return nil, fmt.Errorf("VirtualMachine with dcmlabelinstanceid %q not found", vmID)
+	}
+	item := vmList.Items[0]
+	return &item, nil
 }
 
 // ListVirtualMachines lists all VirtualMachines in the namespace
@@ -120,11 +118,18 @@ func (c *Client) ListVirtualMachines(ctx context.Context, options metav1.ListOpt
 }
 
 // DeleteVirtualMachine deletes a VirtualMachine by name
-func (c *Client) DeleteVirtualMachine(ctx context.Context, name string) error {
+func (c *Client) DeleteVirtualMachine(ctx context.Context, vmId string) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
 
-	return c.dynamicClient.Resource(virtualMachineGVR).Namespace(c.namespace).Delete(timeoutCtx, name, metav1.DeleteOptions{})
+	item, err := c.GetVirtualMachine(ctx, vmId)
+	if err != nil {
+		return fmt.Errorf("failed to get VirtualMachine by dcmlabelinstanceid: %w", err)
+	}
+	if item == nil {
+		return fmt.Errorf("VirtualMachine with dcmlabelinstanceid %q not found", vmId)
+	}
+	return c.dynamicClient.Resource(virtualMachineGVR).Namespace(c.namespace).Delete(timeoutCtx, item.GetName(), metav1.DeleteOptions{})
 }
 
 // UpdateVirtualMachine updates an existing VirtualMachine

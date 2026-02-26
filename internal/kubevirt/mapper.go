@@ -25,14 +25,14 @@ func NewMapper(namespace string) *Mapper {
 }
 
 // VMSpecToVirtualMachine converts a DCM VMSpec to a KubeVirt VirtualMachine unstructured object
-func (m *Mapper) VMSpecToVirtualMachine(vmSpec *types.VMSpec, vmName string, vmID string) (*unstructured.Unstructured, error) {
+func (m *Mapper) VMSpecToVirtualMachine(vmSpec *types.VMSpec, vmID string) (*unstructured.Unstructured, error) {
 	vm := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "kubevirt.io/v1",
 			"kind":       "VirtualMachine",
 			"metadata": map[string]interface{}{
-				"name":      vmName,
-				"namespace": m.namespace,
+				"generateName": "dcm-",
+				"namespace":    m.namespace,
 				"labels": map[string]interface{}{
 					constants.DCMLabelManagedBy:  constants.DCMManagedByValue,
 					constants.DCMLabelInstanceID: vmID,
@@ -59,9 +59,6 @@ func (m *Mapper) VMSpecToVirtualMachine(vmSpec *types.VMSpec, vmName string, vmI
 		},
 	}
 
-	// Add terminationGracePeriodSeconds if needed
-	spec["template"].(map[string]interface{})["spec"].(map[string]interface{})["terminationGracePeriodSeconds"] = int64(180)
-
 	// Set the spec
 	vm.Object["spec"] = spec
 
@@ -78,7 +75,7 @@ func (m *Mapper) buildDomainSpec(vmSpec *types.VMSpec) map[string]interface{} {
 		"resources": m.buildResources(vmSpec),
 	}
 
-	// Add machine type if needed
+	// Add machine type
 	domain["machine"] = map[string]interface{}{
 		"type": "q35",
 	}
@@ -96,12 +93,8 @@ func (m *Mapper) buildResources(vmSpec *types.VMSpec) map[string]interface{} {
 	resources["requests"].(map[string]interface{})["cpu"] = fmt.Sprintf("%d", vmSpec.Vcpu.Count)
 
 	// Set Memory
-	memorySize, err := m.parseMemorySize(vmSpec.Memory.Size)
-	if err == nil {
+	if memorySize, err := m.parseMemorySize(vmSpec.Memory.Size); err == nil {
 		resources["requests"].(map[string]interface{})["memory"] = memorySize
-	} else {
-		// Fallback to default
-		resources["requests"].(map[string]interface{})["memory"] = "2Gi"
 	}
 
 	return resources
@@ -122,7 +115,7 @@ func (m *Mapper) buildDisks(vmSpec *types.VMSpec) []interface{} {
 
 		// Set as boot disk if this is the first disk or named "boot"
 		if i == 0 || disk.Name == "boot" {
-			diskSpec["bootOrder"] = 1
+			diskSpec["bootOrder"] = float64(1)
 		}
 
 		disks = append(disks, diskSpec)
@@ -135,7 +128,7 @@ func (m *Mapper) buildDisks(vmSpec *types.VMSpec) []interface{} {
 			"disk": map[string]interface{}{
 				"bus": "virtio",
 			},
-			"bootOrder": 1,
+			"bootOrder": float64(1),
 		})
 	}
 
@@ -286,20 +279,12 @@ func (m *Mapper) VirtualMachineToVMSpec(vm *unstructured.Unstructured) (*types.V
 		}
 	}
 
-	// If CPU not found, use default
-	if vmSpec.Vcpu.Count == 0 {
-		vmSpec.Vcpu = types.Vcpu{Count: 1}
-	}
-
 	// Extract memory information
 	memory, found, err := unstructured.NestedString(vm.Object, "spec", "template", "spec", "domain", "resources", "requests", "memory")
 	if err == nil && found {
 		vmSpec.Memory = types.Memory{
 			Size: memory,
 		}
-	} else {
-		// Default memory
-		vmSpec.Memory = types.Memory{Size: "1Gi"}
 	}
 
 	// Extract guest OS from container disk image (best effort)
