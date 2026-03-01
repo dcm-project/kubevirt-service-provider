@@ -282,21 +282,29 @@ components:
           readOnly: true
 
     VM:
-      description: Virtual Machine defined by catalog manager VMSpec
+      description: Virtual Machine
       x-aep-resource:
         type: serviceprovider.dcm.io/vm
         singular: vm
         plural: vms
         patterns:
           - vms/{vm_id}
+      required:
+        - id
+        - vm_spec
       properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the VM
+          example: "123e4567-e89b-12d3-a456-426614174000"
         path:
           type: string
-          readOnly: true
           description: Resource path identifier
           example: "vms/123e4567-e89b-12d3-a456-426614174000"
-      allOf:
-        - $ref: 'https://raw.githubusercontent.com/dcm-project/catalog-manager/refs/heads/main/api/v1alpha1/servicetypes/vm/spec.yaml#/components/schemas/VMSpec'
+          readOnly: true
+        vm_spec:
+          $ref: 'https://raw.githubusercontent.com/dcm-project/catalog-manager/refs/heads/main/api/v1alpha1/servicetypes/vm/spec.yaml#/components/schemas/VMSpec'
 
     VMList:
       type: object

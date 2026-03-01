@@ -18,6 +18,9 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Install Redocly CLI
+        run: npm install -g @redocly/cli
+
       - name: Check generated files
         run: make check-generate-api
 
