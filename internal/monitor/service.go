@@ -7,10 +7,12 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
 	"k8s.io/client-go/tools/cache"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -105,15 +107,27 @@ func (s *Service) Run(ctx context.Context) error {
 
 // handleVMEvent handles any VM/VMI event by publishing current state
 func (s *Service) handleVMEvent(obj interface{}, eventType string) {
-	var vm *unstructured.Unstructured
-	vm, ok := obj.(*unstructured.Unstructured)
+	u, ok := obj.(*unstructured.Unstructured)
 	if !ok {
 		log.Printf("Warning: handleVMEvent received non-unstructured object")
 		return
 	}
 
+	// Convert unstructured to typed VMI at the informer boundary
+	vmi := &kubevirtv1.VirtualMachineInstance{}
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(u.Object, vmi); err != nil {
+		log.Printf("Error converting unstructured to VirtualMachineInstance: %v", err)
+		return
+	}
+
+	// If the VMI don't contain ID skip the VM event
+	if vmi.Labels[constants.DCMLabelInstanceID] == "" {
+		log.Printf("Warning: VMI %s does not contain DCM instance ID", vmi.Name)
+		return
+	}
+
 	// Extract VM information
-	vmInfo, err := ExtractVMInfo(vm)
+	vmInfo, err := ExtractVMInfo(vmi)
 	if err != nil {
 		log.Printf("Error extracting VM info: %v", err)
 		return

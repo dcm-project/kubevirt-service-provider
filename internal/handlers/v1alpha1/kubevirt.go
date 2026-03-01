@@ -7,7 +7,7 @@ import (
 
 	openapi_types "github.com/oapi-codegen/runtime/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
 	"github.com/dcm-project/kubevirt-service-provider/internal/constants"
@@ -35,11 +35,10 @@ func (s *KubevirtHandler) vmIDToName(vmID openapi_types.UUID) string {
 	return fmt.Sprintf("vm-%s", strings.ReplaceAll(vmID.String(), "-", "")[:8])
 }
 
-// unstructuredVMToServerVM converts an unstructured KubeVirt VM to the API server.VM type.
+// kubevirtVMToServerVM converts a typed KubeVirt VM to the API server.VM type.
 // It extracts the DCM instance ID from spec.template.metadata.labels for the resource path.
-func unstructuredVMToServerVM(s *KubevirtHandler, vm *unstructured.Unstructured) (*server.VM, error) {
-	vmName, found, err := unstructured.NestedString(vm.Object, "metadata", "name")
-	if err != nil || !found || vmName == "" {
+func kubevirtVMToServerVM(s *KubevirtHandler, vm *kubevirtv1.VirtualMachine) (*server.VM, error) {
+	if vm.Name == "" {
 		return nil, fmt.Errorf("VM missing metadata.name")
 	}
 	vmSpec, err := s.mapper.VirtualMachineToVMSpec(vm)
@@ -48,10 +47,12 @@ func unstructuredVMToServerVM(s *KubevirtHandler, vm *unstructured.Unstructured)
 	}
 	var path *string
 	var vmID string
-	labels, _, _ := unstructured.NestedStringMap(vm.Object, "spec", "template", "metadata", "labels")
-	if vmID, ok := labels[constants.DCMLabelInstanceID]; ok && vmID != "" {
-		p := fmt.Sprintf("%svms/%s", ApiPrefix, vmID)
-		path = &p
+	if vm.Spec.Template != nil {
+		if id, ok := vm.Spec.Template.ObjectMeta.Labels[constants.DCMLabelInstanceID]; ok && id != "" {
+			vmID = id
+			p := fmt.Sprintf("%svms/%s", ApiPrefix, vmID)
+			path = &p
+		}
 	}
 	return vmSpecToServerVM(vmSpec, path, vmID), nil
 }
@@ -75,10 +76,9 @@ func (s *KubevirtHandler) ListVMs(ctx context.Context, request server.ListVMsReq
 	if err != nil {
 		return kubevirt.MapKubernetesErrorForList(err), nil
 	}
-	vms := make([]server.VM, 0, len(list.Items))
-	for i := range list.Items {
-		vm := &list.Items[i]
-		serverVM, err := unstructuredVMToServerVM(s, vm)
+	vms := make([]server.VM, 0, len(list))
+	for i := range list {
+		serverVM, err := kubevirtVMToServerVM(s, &list[i])
 		if err != nil {
 			// Skip VMs that fail to convert (e.g. missing required data)
 			continue
@@ -170,7 +170,7 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 
 	// Successfully created VM
 	if createdVM != nil {
-		serverVM, err := unstructuredVMToServerVM(s, createdVM)
+		serverVM, err := kubevirtVMToServerVM(s, createdVM)
 		if err != nil {
 			return kubevirt.MapKubernetesError(err), nil
 		}
@@ -276,17 +276,15 @@ func (s *KubevirtHandler) ApplyVM(ctx context.Context, request server.ApplyVMReq
 }
 
 // extractVMIDFromVM extracts the DCM instance ID from a KubeVirt VM object
-func (s *KubevirtHandler) extractVMIDFromVM(vm *unstructured.Unstructured) string {
+func (s *KubevirtHandler) extractVMIDFromVM(vm *kubevirtv1.VirtualMachine) string {
 	// First check main metadata labels
-	if labels := vm.GetLabels(); labels != nil {
-		if vmID, found := labels[constants.DCMLabelInstanceID]; found && vmID != "" {
-			return vmID
-		}
+	if vmID, found := vm.Labels[constants.DCMLabelInstanceID]; found && vmID != "" {
+		return vmID
 	}
 
 	// Then check template metadata labels (for VMs created before label propagation fix)
-	if templateLabels, found, err := unstructured.NestedStringMap(vm.Object, "spec", "template", "metadata", "labels"); err == nil && found {
-		if vmID, exists := templateLabels[constants.DCMLabelInstanceID]; exists && vmID != "" {
+	if vm.Spec.Template != nil {
+		if vmID, found := vm.Spec.Template.ObjectMeta.Labels[constants.DCMLabelInstanceID]; found && vmID != "" {
 			return vmID
 		}
 	}

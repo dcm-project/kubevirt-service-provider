@@ -1,12 +1,15 @@
 package kubevirt_test
 
 import (
-	"strconv"
+	"fmt"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	k8sv1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	kubevirtv1 "kubevirt.io/api/core/v1"
 
 	"github.com/dcm-project/kubevirt-service-provider/api/v1alpha1"
 	"github.com/dcm-project/kubevirt-service-provider/internal/kubevirt"
@@ -50,16 +53,16 @@ var _ = Describe("Mapper", func() {
 				},
 			}
 
-			vm, err := mapper.VMSpecToVirtualMachine(vmSpec, "test-vm", "00000000-0000-0000-0000-000000000001")
+			vm, err := mapper.VMSpecToVirtualMachine(vmSpec, "00000000-0000-0000-0000-000000000001")
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(vm).NotTo(BeNil())
 
 			// Check basic metadata
-			Expect(vm.GetName()).To(Equal("test-vm"))
-			Expect(vm.GetNamespace()).To(Equal("default"))
-			Expect(vm.GetAPIVersion()).To(Equal("kubevirt.io/v1"))
-			Expect(vm.GetKind()).To(Equal("VirtualMachine"))
+			Expect(vm.GenerateName).To(Equal("dcm-"))
+			Expect(vm.Namespace).To(Equal("default"))
+			Expect(vm.TypeMeta.APIVersion).To(Equal("kubevirt.io/v1"))
+			Expect(vm.TypeMeta.Kind).To(Equal("VirtualMachine"))
 		})
 
 		It("should handle empty storage with default boot disk", func() {
@@ -82,11 +85,12 @@ var _ = Describe("Mapper", func() {
 				},
 			}
 
-			vm, err := mapper.VMSpecToVirtualMachine(vmSpec, "minimal-vm", "00000000-0000-0000-0000-000000000002")
+			vm, err := mapper.VMSpecToVirtualMachine(vmSpec, "00000000-0000-0000-0000-000000000002")
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(vm).NotTo(BeNil())
-			Expect(vm.GetName()).To(Equal("minimal-vm"))
+			Expect(vm.Spec.Template.Spec.Domain.Devices.Disks).To(HaveLen(1))
+			Expect(vm.Spec.Template.Spec.Domain.Devices.Disks[0].Name).To(Equal("boot"))
 		})
 	})
 
@@ -114,7 +118,7 @@ var _ = Describe("Mapper", func() {
 				},
 			}
 
-			vm, err := mapper.VMSpecToVirtualMachine(vmSpec, "roundtrip-vm", "00000000-0000-0000-0000-000000000003")
+			vm, err := mapper.VMSpecToVirtualMachine(vmSpec, "00000000-0000-0000-0000-000000000003")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(vm).NotTo(BeNil())
 
@@ -154,46 +158,54 @@ var _ = Describe("Mapper", func() {
 	})
 })
 
-// kubevirtVMWithContainerDisk builds an unstructured VirtualMachine with the given container disk image, CPU count and memory.
-func kubevirtVMWithContainerDisk(containerImage string, cpuCount int, memorySize string) *unstructured.Unstructured {
-	cpuStr := strconv.Itoa(cpuCount)
-	if cpuStr == "0" {
-		cpuStr = "1"
+// kubevirtVMWithContainerDisk builds a typed VirtualMachine with the given container disk image, CPU count and memory.
+func kubevirtVMWithContainerDisk(containerImage string, cpuCount int, memorySize string) *kubevirtv1.VirtualMachine {
+	if cpuCount == 0 {
+		cpuCount = 1
 	}
-	return &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "kubevirt.io/v1",
-			"kind":       "VirtualMachine",
-			"metadata": map[string]interface{}{
-				"name":      "test-vm",
-				"namespace": "default",
-			},
-			"spec": map[string]interface{}{
-				"running": true,
-				"template": map[string]interface{}{
-					"spec": map[string]interface{}{
-						"domain": map[string]interface{}{
-							"resources": map[string]interface{}{
-								"requests": map[string]interface{}{
-									"cpu":    cpuStr,
-									"memory": memorySize,
-								},
+	bootOrder := uint(1)
+	running := true
+
+	return &kubevirtv1.VirtualMachine{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "kubevirt.io/v1",
+			Kind:       "VirtualMachine",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-vm",
+			Namespace: "default",
+		},
+		Spec: kubevirtv1.VirtualMachineSpec{
+			Running: &running,
+			Template: &kubevirtv1.VirtualMachineInstanceTemplateSpec{
+				Spec: kubevirtv1.VirtualMachineInstanceSpec{
+					Domain: kubevirtv1.DomainSpec{
+						Resources: kubevirtv1.ResourceRequirements{
+							Requests: k8sv1.ResourceList{
+								k8sv1.ResourceCPU:    resource.MustParse(fmt.Sprintf("%d", cpuCount)),
+								k8sv1.ResourceMemory: resource.MustParse(memorySize),
 							},
-							"devices": map[string]interface{}{
-								"disks": []interface{}{
-									map[string]interface{}{
-										"name":      "boot",
-										"disk":      map[string]interface{}{"bus": "virtio"},
-										"bootOrder": float64(1),
+						},
+						Devices: kubevirtv1.Devices{
+							Disks: []kubevirtv1.Disk{
+								{
+									Name: "boot",
+									DiskDevice: kubevirtv1.DiskDevice{
+										Disk: &kubevirtv1.DiskTarget{
+											Bus: kubevirtv1.DiskBusVirtio,
+										},
 									},
+									BootOrder: &bootOrder,
 								},
 							},
 						},
-						"volumes": []interface{}{
-							map[string]interface{}{
-								"name": "boot",
-								"containerDisk": map[string]interface{}{
-									"image": containerImage,
+					},
+					Volumes: []kubevirtv1.Volume{
+						{
+							Name: "boot",
+							VolumeSource: kubevirtv1.VolumeSource{
+								ContainerDisk: &kubevirtv1.ContainerDiskSource{
+									Image: containerImage,
 								},
 							},
 						},
