@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -11,8 +12,10 @@ import (
 	"github.com/dcm-project/kubevirt-service-provider/api/v1alpha1"
 	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
 	"github.com/dcm-project/kubevirt-service-provider/internal/config"
+	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	nethttpmiddleware "github.com/oapi-codegen/nethttp-middleware"
 )
 
 const gracefulShutdownTimeout = 5 * time.Second
@@ -46,6 +49,17 @@ func (s *Server) Run(ctx context.Context) error {
 		baseURL = swagger.Servers[0].URL
 	}
 
+	// Create a copy of the swagger spec for validation that preserves server context
+	validationSwagger := *swagger
+
+	// Add OpenAPI request validation middleware with server context
+	router.Use(nethttpmiddleware.OapiRequestValidatorWithOptions(&validationSwagger, &nethttpmiddleware.Options{
+		Options: openapi3filter.Options{
+			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
+		},
+		SilenceServersWarning: true,
+	}))
+
 	server.HandlerFromMuxWithBaseURL(
 		server.NewStrictHandler(s.handler, nil),
 		router,
@@ -59,7 +73,9 @@ func (s *Server) Run(ctx context.Context) error {
 		ctxTimeout, cancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
 		defer cancel()
 		srv.SetKeepAlivesEnabled(false)
-		_ = srv.Shutdown(ctxTimeout)
+		if err := srv.Shutdown(ctxTimeout); err != nil {
+			log.Printf("Error during server shutdown: %v", err)
+		}
 	}()
 
 	if err := srv.Serve(s.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
