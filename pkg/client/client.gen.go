@@ -107,11 +107,6 @@ type ClientInterface interface {
 
 	// GetVM request
 	GetVM(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ApplyVMWithBody request with any body
-	ApplyVMWithBody(ctx context.Context, vmId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	ApplyVM(ctx context.Context, vmId openapi_types.UUID, body ApplyVMJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -176,30 +171,6 @@ func (c *Client) DeleteVM(ctx context.Context, vmId openapi_types.UUID, reqEdito
 
 func (c *Client) GetVM(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetVMRequest(c.Server, vmId)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) ApplyVMWithBody(ctx context.Context, vmId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApplyVMRequestWithBody(c.Server, vmId, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) ApplyVM(ctx context.Context, vmId openapi_types.UUID, body ApplyVMJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewApplyVMRequest(c.Server, vmId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -432,53 +403,6 @@ func NewGetVMRequest(server string, vmId openapi_types.UUID) (*http.Request, err
 	return req, nil
 }
 
-// NewApplyVMRequest calls the generic ApplyVM builder with application/json body
-func NewApplyVMRequest(server string, vmId openapi_types.UUID, body ApplyVMJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewApplyVMRequestWithBody(server, vmId, "application/json", bodyReader)
-}
-
-// NewApplyVMRequestWithBody generates requests for ApplyVM with any type of body
-func NewApplyVMRequestWithBody(server string, vmId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "vmId", runtime.ParamLocationPath, vmId)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/vms/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("PUT", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 func (c *Client) applyEditors(ctx context.Context, req *http.Request, additionalEditors []RequestEditorFn) error {
 	for _, r := range c.RequestEditors {
 		if err := r(ctx, req); err != nil {
@@ -538,11 +462,6 @@ type ClientWithResponsesInterface interface {
 
 	// GetVMWithResponse request
 	GetVMWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetVMResponse, error)
-
-	// ApplyVMWithBodyWithResponse request with any body
-	ApplyVMWithBodyWithResponse(ctx context.Context, vmId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplyVMResponse, error)
-
-	ApplyVMWithResponse(ctx context.Context, vmId openapi_types.UUID, body ApplyVMJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplyVMResponse, error)
 }
 
 type GetHealthResponse struct {
@@ -666,32 +585,6 @@ func (r GetVMResponse) StatusCode() int {
 	return 0
 }
 
-type ApplyVMResponse struct {
-	Body                          []byte
-	HTTPResponse                  *http.Response
-	JSON200                       *VM
-	ApplicationproblemJSON400     *Error
-	ApplicationproblemJSON404     *Error
-	ApplicationproblemJSON409     *Error
-	ApplicationproblemJSONDefault *Error
-}
-
-// Status returns HTTPResponse.Status
-func (r ApplyVMResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ApplyVMResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
 // GetHealthWithResponse request returning *GetHealthResponse
 func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error) {
 	rsp, err := c.GetHealth(ctx, reqEditors...)
@@ -743,23 +636,6 @@ func (c *ClientWithResponses) GetVMWithResponse(ctx context.Context, vmId openap
 		return nil, err
 	}
 	return ParseGetVMResponse(rsp)
-}
-
-// ApplyVMWithBodyWithResponse request with arbitrary body returning *ApplyVMResponse
-func (c *ClientWithResponses) ApplyVMWithBodyWithResponse(ctx context.Context, vmId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ApplyVMResponse, error) {
-	rsp, err := c.ApplyVMWithBody(ctx, vmId, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseApplyVMResponse(rsp)
-}
-
-func (c *ClientWithResponses) ApplyVMWithResponse(ctx context.Context, vmId openapi_types.UUID, body ApplyVMJSONRequestBody, reqEditors ...RequestEditorFn) (*ApplyVMResponse, error) {
-	rsp, err := c.ApplyVM(ctx, vmId, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseApplyVMResponse(rsp)
 }
 
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
@@ -956,60 +832,6 @@ func ParseGetVMResponse(rsp *http.Response) (*GetVMResponse, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSONDefault = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseApplyVMResponse parses an HTTP response from a ApplyVMWithResponse call
-func ParseApplyVMResponse(rsp *http.Response) (*ApplyVMResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ApplyVMResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest VM
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest Error
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest Error

@@ -7,13 +7,16 @@ info:
   license:
     name: Apache 2.0
     url: https://www.apache.org/licenses/LICENSE-2.0.html
+
 servers:
   - url: /api/v1alpha1
+
 tags:
   - name: vm
     description: Virtual Machine resource management
   - name: health
     description: Health check operations
+
 paths:
   /health:
     get:
@@ -29,6 +32,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Health'
+
   /vms:
     get:
       tags:
@@ -69,6 +73,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Error'
+
     post:
       tags:
         - vm
@@ -121,6 +126,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Error'
+
   /vms/{vmId}:
     get:
       tags:
@@ -196,6 +202,7 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Error'
+
 components:
   schemas:
     Health:
@@ -212,12 +219,13 @@ components:
         status:
           type: string
           description: Health status
-          example: ok
+          example: "ok"
         path:
           type: string
           description: Canonical path of the resource
-          example: ok
+          example: "ok"
           readOnly: true
+
     VM:
       description: Virtual Machine
       x-aep-resource:
@@ -234,14 +242,15 @@ components:
           type: string
           format: uuid
           description: Unique identifier of the VM
-          example: 123e4567-e89b-12d3-a456-426614174000
+          example: "123e4567-e89b-12d3-a456-426614174000"
         path:
           type: string
           readOnly: true
           description: Resource path identifier
-          example: vms/123e4567-e89b-12d3-a456-426614174000
+          example: "vms/123e4567-e89b-12d3-a456-426614174000"
         vm_spec:
-          $ref: '#/components/schemas/VMSpec'
+          $ref: 'https://raw.githubusercontent.com/dcm-project/catalog-manager/refs/heads/main/api/v1alpha1/servicetypes/vm/spec.yaml#/components/schemas/VMSpec'
+
     VMList:
       type: object
       description: Paginated list of VMs
@@ -253,7 +262,8 @@ components:
         next_page_token:
           type: string
           description: Token for retrieving the next page of results
-          example: eyJpZCI6IjEyM2U0NTY3LWU4OWItMTJkMy1hNDU2LTQyNjYxNDE3NDAwMCJ9
+          example: "eyJpZCI6IjEyM2U0NTY3LWU4OWItMTJkMy1hNDU2LTQyNjYxNDE3NDAwMCJ9"
+
     Error:
       type: object
       description: RFC 7807 compliant error response
@@ -265,11 +275,11 @@ components:
           type: string
           format: uri-reference
           description: URI reference identifying the error type
-          example: https://dcm.example.com/errors/invalid-input
+          example: "https://dcm.example.com/errors/invalid-input"
         title:
           type: string
           description: Short human-readable summary of the problem
-          example: Invalid Input
+          example: "Invalid Input"
         status:
           type: integer
           description: HTTP status code
@@ -277,224 +287,9 @@ components:
         detail:
           type: string
           description: Human-readable explanation specific to this occurrence
-          example: The 'name' field is required but was not provided
+          example: "The 'name' field is required but was not provided"
         instance:
           type: string
           format: uri-reference
           description: URI reference for this specific error occurrence
-          example: /errors/123e4567-e89b-12d3-a456-426614174000
-    ServiceType:
-      type: string
-      description: |
-        Service type identifier.
-        Makes the payload self-describing and enables routing/validation.
-      enum:
-        - vm
-        - container
-        - database
-        - cluster
-        - three_tier_app_demo
-      example: vm
-    ServiceMetadata:
-      type: object
-      description: |
-        Resource metadata for identification and governance.
-        Used by all service type specifications.
-      required:
-        - name
-      properties:
-        name:
-          type: string
-          description: |
-            Resource name identifier.
-            Must be unique within the namespace.
-          pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-          minLength: 1
-          maxLength: 63
-          example: my-dev-vm
-        labels:
-          type: object
-          description: |
-            Key-value pairs for tagging and filtering.
-            Both keys and values must be strings.
-          additionalProperties:
-            type: string
-          example:
-            environment: production
-            owner: platform-team
-    ProviderHints:
-      type: object
-      description: |
-        Optional provider-specific configuration.
-
-        Allows platform-specific settings without breaking portability.
-        Providers use hints they recognize and ignore unknown hints.
-
-        Keys are provider identifiers (e.g., kubevirt, vmware, aws).
-        Values are provider-specific configuration objects.
-      additionalProperties:
-        type: object
-        additionalProperties: true
-      example:
-        kubevirt:
-          instanceType: u1.large
-        vmware:
-          vmxVersion: '17'
-        aws:
-          instanceType: t3.xlarge
-    CommonFields:
-      type: object
-      description: |
-        Common fields included in all service type specifications.
-        These provide versioning, extensibility, and provider-specific configuration.
-      required:
-        - service_type
-        - metadata
-      properties:
-        service_type:
-          $ref: '#/components/schemas/ServiceType'
-        metadata:
-          $ref: '#/components/schemas/ServiceMetadata'
-        provider_hints:
-          $ref: '#/components/schemas/ProviderHints'
-    Vcpu:
-      type: object
-      description: Virtual CPU configuration
-      required:
-        - count
-      properties:
-        count:
-          type: integer
-          description: |
-            Number of virtual CPUs.
-            Maps to vCPU count in all providers.
-          minimum: 1
-          example: 4
-      additionalProperties: true
-    Memory:
-      type: object
-      description: Memory configuration (RAM)
-      required:
-        - size
-      properties:
-        size:
-          type: string
-          description: |
-            Memory size with unit suffix (MB, GB, TB).
-            Maps to guest memory in all providers.
-          pattern: ^[0-9]+(MB|GB|TB)$
-          example: 16GB
-      additionalProperties: true
-    Disk:
-      type: object
-      description: Virtual disk specification
-      required:
-        - name
-        - capacity
-      properties:
-        name:
-          type: string
-          description: |
-            Disk identifier (unique within VM).
-            The root volume must be named "boot".
-            Additional disks can use names like "data", "log", etc.
-          pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
-          example: boot
-        capacity:
-          type: string
-          description: Disk capacity with unit suffix (MB, GB, TB)
-          pattern: ^[0-9]+(MB|GB|TB)$
-          example: 100GB
-      additionalProperties: true
-    Storage:
-      type: object
-      description: Storage configuration
-      required:
-        - disks
-      properties:
-        disks:
-          type: array
-          description: |
-            Virtual disk specifications.
-
-            Requirements:
-            - Must contain at least one disk named "boot" for the root volume
-            - Disk names must be unique within the VM
-
-            Note: The boot disk requirement is enforced at application level.
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/Disk'
-      additionalProperties: true
-    GuestOS:
-      type: object
-      description: |
-        Guest operating system configuration.
-        Providers map the OS type to their image catalog.
-      required:
-        - type
-      properties:
-        type:
-          type: string
-          description: |
-            Operating system identifier.
-
-            Naming convention: <distro>-<version>
-            Examples:
-            - Linux: rhel-9, ubuntu-22.04, fedora-39, centos-stream-9
-            - Windows: windows-server-2022, windows-11
-
-            Providers map this to their image catalog:
-            - KubeVirt: Container image or DataVolume
-            - VMware: VM template or content library item
-            - AWS: AMI ID
-            - Azure: Image reference
-          example: rhel-9
-      additionalProperties: true
-    Access:
-      type: object
-      description: VM access configuration
-      properties:
-        ssh_public_key:
-          type: string
-          description: |
-            SSH public key for VM access.
-            Injected via cloud-init/cloudbase-init by providers.
-
-            Provider mapping:
-            - KubeVirt: cloud-init userData
-            - AWS: key pair
-            - Azure: SSH public key
-            - GCP: instance metadata
-            - VMware: guest customization
-          example: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample...
-      additionalProperties: true
-    VMSpec:
-      type: object
-      description: |
-        Provider-agnostic virtual machine specification.
-
-        Includes common fields (service_type, metadata, provider_hints)
-        plus VM-specific fields for compute, storage, and operating system.
-
-        Providers translate this abstract specification to their native format.
-      allOf:
-        - $ref: '#/components/schemas/CommonFields'
-        - type: object
-          required:
-            - vcpu
-            - memory
-            - storage
-            - guest_os
-          properties:
-            vcpu:
-              $ref: '#/components/schemas/Vcpu'
-            memory:
-              $ref: '#/components/schemas/Memory'
-            storage:
-              $ref: '#/components/schemas/Storage'
-            guest_os:
-              $ref: '#/components/schemas/GuestOS'
-            access:
-              $ref: '#/components/schemas/Access'
-          additionalProperties: true
+          example: "/errors/123e4567-e89b-12d3-a456-426614174000"
