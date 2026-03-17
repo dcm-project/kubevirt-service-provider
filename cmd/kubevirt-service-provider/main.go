@@ -60,7 +60,7 @@ func main() {
 		// Initialize NATS publisher
 		publisherConfig := events.PublisherConfig{
 			NATSURL:      cfg.NATSConfig.URL,
-			Timeout:      cfg.NATSConfig.Timeout,
+			Subject:      cfg.NATSConfig.Subject,
 			MaxReconnect: cfg.NATSConfig.MaxReconnect,
 		}
 		publisher, err := events.NewPublisher(publisherConfig)

@@ -33,10 +33,8 @@ var _ = Describe("Publisher", func() {
 		It("should return not-connected error when natsConn is nil", func() {
 			p := &Publisher{}
 			err := p.PublishVMEvent(context.Background(), VMEvent{
-				VMID:      "test-id",
-				VMName:    "test-vm",
-				Namespace: "default",
-				Phase:     "Running",
+				Id:        "test-id",
+				Status:    "Running",
 				Timestamp: time.Now(),
 			})
 			Expect(err).To(HaveOccurred())
@@ -48,7 +46,7 @@ var _ = Describe("Publisher", func() {
 		It("should return error when NATS server is unreachable", func() {
 			_, err := NewPublisher(PublisherConfig{
 				NATSURL:      "nats://127.0.0.1:14222",
-				Timeout:      1 * time.Second,
+				Subject:      "test.subject",
 				MaxReconnect: 0,
 			})
 			Expect(err).To(HaveOccurred())

@@ -33,7 +33,7 @@ func createVMRequestToVMSpec(createVM *server.CreateVMJSONRequestBody) (*types.V
 		return nil, fmt.Errorf("createVM request body is nil")
 	}
 
-	data, err := json.Marshal(createVM)
+	data, err := json.Marshal(createVM.Spec)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal create VM request: %w", err)
 	}

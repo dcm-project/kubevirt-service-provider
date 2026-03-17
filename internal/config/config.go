@@ -44,12 +44,12 @@ type KubernetesConfig struct {
 type NATSConfig struct {
 	// URL is the NATS server URL
 	URL string `envconfig:"NATS_URL" default:"nats://localhost:4222"`
-	// Timeout for NATS operations
-	Timeout time.Duration `envconfig:"NATS_TIMEOUT" default:"10s"`
 	// MaxReconnect attempts (-1 for unlimited)
 	MaxReconnect int `envconfig:"NATS_MAX_RECONNECT" default:"-1"`
 	// ReconnectWait time between reconnect attempts
 	ReconnectWait time.Duration `envconfig:"NATS_RECONNECT_WAIT" default:"2s"`
+	// Subject is the JetStream subject for VM events
+	Subject string `envconfig:"NATS_SUBJECT" default:"dcm.vm"`
 }
 
 // EventConfig holds configuration for event monitoring

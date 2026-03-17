@@ -10,41 +10,40 @@ import (
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 	"github.com/google/uuid"
 	"github.com/nats-io/nats.go"
+	"github.com/nats-io/nats.go/jetstream"
 )
 
 // VMEvent represents a VM status event
 type VMEvent struct {
-	VMID      string    `json:"vmId"`
-	VMName    string    `json:"vmName"`
-	Namespace string    `json:"namespace"`
-	Phase     string    `json:"phase"`
+	Id        string    `json:"id"`
+	Status    string    `json:"status"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// Publisher handles NATS event publishing with CloudEvents formatting
+// Publisher handles NATS JetStream event publishing with CloudEvents formatting
 type Publisher struct {
 	natsConn     *nats.Conn
+	js           jetstream.JetStream
 	natsURL      string
-	timeout      time.Duration
+	subject      string
 	maxReconnect int
 }
 
 // PublisherConfig contains configuration for the event publisher
 type PublisherConfig struct {
 	NATSURL      string
-	Timeout      time.Duration
+	Subject      string
 	MaxReconnect int
 }
 
-// NewPublisher creates a new NATS publisher
+// NewPublisher creates a new NATS JetStream publisher
 func NewPublisher(config PublisherConfig) (*Publisher, error) {
 	p := &Publisher{
 		natsURL:      config.NATSURL,
-		timeout:      config.Timeout,
+		subject:      config.Subject,
 		maxReconnect: config.MaxReconnect,
 	}
 
-	// Connect to NATS
 	if err := p.connect(); err != nil {
 		return nil, fmt.Errorf("failed to create NATS publisher: %w", err)
 	}
@@ -52,11 +51,11 @@ func NewPublisher(config PublisherConfig) (*Publisher, error) {
 	return p, nil
 }
 
-// connect establishes connection to NATS server
+// connect establishes connection to NATS server and sets up JetStream
 func (p *Publisher) connect() error {
 	opts := []nats.Option{
 		nats.ReconnectWait(2 * time.Second),
-		nats.MaxReconnects(p.maxReconnect), // Use configured reconnect limit
+		nats.MaxReconnects(p.maxReconnect),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			log.Printf("NATS disconnected: %v", err)
 		}),
@@ -72,51 +71,49 @@ func (p *Publisher) connect() error {
 	if err != nil {
 		return fmt.Errorf("failed to connect to NATS: %w", err)
 	}
-
 	p.natsConn = nc
+
+	js, err := jetstream.New(nc)
+	if err != nil {
+		nc.Close()
+		return fmt.Errorf("failed to create JetStream context: %w", err)
+	}
+	p.js = js
+
+	log.Printf("Connected to NATS, publishing to subject %q", p.subject)
 	return nil
 }
 
-// PublishVMEvent publishes a VM phase change event to NATS
+// PublishVMEvent publishes a VM phase change event to NATS JetStream
 func (p *Publisher) PublishVMEvent(ctx context.Context, vmEvent VMEvent) error {
-	// Check if connected
 	if !p.IsConnected() {
 		return fmt.Errorf("NATS connection not available")
 	}
 
-	// Determine NATS subject (per-VM pattern)
-	subject := fmt.Sprintf("vm.kubevirt.%s", vmEvent.VMID)
-
 	// Create CloudEvent
 	event := cloudevents.NewEvent()
 	event.SetID(uuid.New().String())
-	event.SetType("dcm.providers.kubevirt.vm.status")
+	event.SetType("dcm.status.vm")
 	event.SetSource("kubevirt.localhost") // TODO: change to the actual source
-	event.SetSubject(subject)
+	event.SetSubject(p.subject)
 	event.SetTime(vmEvent.Timestamp)
 
-	// Set event data
 	if err := event.SetData(cloudevents.ApplicationJSON, vmEvent); err != nil {
 		return fmt.Errorf("failed to set CloudEvent data: %w", err)
 	}
 
-	// Convert to JSON for NATS publishing
 	eventData, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to marshal CloudEvent: %w", err)
 	}
 
-	// Publish to NATS
-	if err := p.natsConn.Publish(subject, eventData); err != nil {
-		return fmt.Errorf("failed to publish event to NATS: %w", err)
+	// Publish to JetStream with acknowledgement
+	_, err = p.js.Publish(ctx, p.subject, eventData)
+	if err != nil {
+		return fmt.Errorf("failed to publish event to JetStream: %w", err)
 	}
 
-	// Ensure message is flushed to server
-	if err := p.natsConn.FlushTimeout(p.timeout); err != nil {
-		return fmt.Errorf("failed to flush NATS message: %w", err)
-	}
-
-	log.Printf("Successfully published VM event for %s to NATS subject %s", vmEvent.VMID, subject)
+	log.Printf("Successfully published VM event for %s to JetStream subject %s", vmEvent.Id, p.subject)
 	return nil
 }
 

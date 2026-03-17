@@ -144,10 +144,8 @@ func (s *Service) handleVMEvent(obj interface{}, eventType string) {
 // publishVMEvent publishes the current VM state
 func (s *Service) publishVMEvent(vmInfo VMInfo) {
 	vmEvent := events.VMEvent{
-		VMID:      vmInfo.VMID,
-		VMName:    vmInfo.VMName,
-		Namespace: vmInfo.Namespace,
-		Phase:     vmInfo.Phase.String(),
+		Id:        vmInfo.VMID,
+		Status:    vmInfo.Phase.String(),
 		Timestamp: time.Now(),
 	}
 
