@@ -92,6 +92,8 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 	vmID := request.Params.Id.String()
 	path := fmt.Sprintf("%svms/%s", APIPrefix, vmID)
 
+	log.Printf("CreateVM called: vmID=%s, body=%+v", vmID, vmSpec)
+
 	// Convert VMSpec to KubeVirt VirtualMachine
 	catalogVMSpec, err := createVMRequestToVMSpec(vmSpec)
 	if err != nil {

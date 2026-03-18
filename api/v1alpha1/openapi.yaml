@@ -15,7 +15,7 @@ tags:
   - name: health
     description: Health check operations
 paths:
-  /health:
+  /vms/health:
     get:
       tags:
         - health
@@ -227,20 +227,14 @@ components:
         patterns:
           - vms/{vm_id}
       required:
-        - id
-        - vm_spec
+        - spec
       properties:
-        id:
-          type: string
-          format: uuid
-          description: Unique identifier of the VM
-          example: 123e4567-e89b-12d3-a456-426614174000
         path:
           type: string
           readOnly: true
           description: Resource path identifier
           example: vms/123e4567-e89b-12d3-a456-426614174000
-        vm_spec:
+        spec:
           $ref: '#/components/schemas/VMSpec'
     VMList:
       type: object

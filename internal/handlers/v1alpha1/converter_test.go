@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -28,7 +27,6 @@ var _ = Describe("Converters", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(*result.Path).To(Equal(path))
-			Expect(result.Id).To(Equal(uuid.MustParse(vmID)))
 		})
 
 		It("should handle invalid UUID gracefully", func() {
@@ -41,7 +39,6 @@ var _ = Describe("Converters", func() {
 			Expect(result).NotTo(BeNil())
 			Expect(*result.Path).To(Equal(path))
 			// UUID stays zero when parse fails
-			Expect(result.Id).To(Equal(uuid.UUID{}))
 		})
 
 		It("should handle nil path", func() {
@@ -53,7 +50,6 @@ var _ = Describe("Converters", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).NotTo(BeNil())
 			Expect(result.Path).To(BeNil())
-			Expect(result.Id).To(Equal(uuid.MustParse(vmID)))
 		})
 	})
 
@@ -68,7 +64,7 @@ var _ = Describe("Converters", func() {
 
 		It("should return a non-nil VMSpec for valid input", func() {
 			body := &server.CreateVMJSONRequestBody{
-				VmSpec: server.VMSpec{
+				Spec: server.VMSpec{
 					ServiceType: server.Vm,
 					Metadata:    server.ServiceMetadata{Name: "test-vm"},
 					GuestOs:     server.GuestOS{Type: "ubuntu"},

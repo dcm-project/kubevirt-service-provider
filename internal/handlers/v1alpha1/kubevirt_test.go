@@ -6,9 +6,9 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
 
@@ -27,7 +27,7 @@ func newTestVM(vmID string) *kubevirtv1.VirtualMachine {
 			Namespace: "default",
 			Labels: map[string]string{
 				constants.DCMLabelInstanceID: vmID,
-				constants.DCMLabelManagedBy: constants.DCMManagedByValue,
+				constants.DCMLabelManagedBy:  constants.DCMManagedByValue,
 			},
 		},
 		Spec: kubevirtv1.VirtualMachineSpec{
@@ -35,7 +35,7 @@ func newTestVM(vmID string) *kubevirtv1.VirtualMachine {
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
 						constants.DCMLabelInstanceID: vmID,
-						constants.DCMLabelManagedBy: constants.DCMManagedByValue,
+						constants.DCMLabelManagedBy:  constants.DCMManagedByValue,
 					},
 				},
 			},
@@ -179,7 +179,7 @@ var _ = Describe("KubevirtHandler", func() {
 
 		BeforeEach(func() {
 			body := server.CreateVMJSONRequestBody{
-				VmSpec: server.VMSpec{
+				Spec: server.VMSpec{
 					ServiceType: server.Vm,
 					Metadata:    server.ServiceMetadata{Name: "test-vm"},
 					GuestOs:     server.GuestOS{Type: "ubuntu"},

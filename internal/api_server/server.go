@@ -58,6 +58,10 @@ func (s *Server) Run(ctx context.Context) error {
 			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
 		},
 		SilenceServersWarning: true,
+		ErrorHandler: func(w http.ResponseWriter, message string, statusCode int) {
+			log.Printf("OpenAPI validation error (status %d): %s", statusCode, message)
+			http.Error(w, message, statusCode)
+		},
 	}))
 
 	server.HandlerFromMuxWithBaseURL(
