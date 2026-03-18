@@ -91,9 +91,6 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
-	// GetHealth request
-	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// ListVMs request
 	ListVMs(ctx context.Context, params *ListVMsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -102,23 +99,14 @@ type ClientInterface interface {
 
 	CreateVM(ctx context.Context, params *CreateVMParams, body CreateVMJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetHealth request
+	GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteVM request
 	DeleteVM(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetVM request
 	GetVM(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
-}
-
-func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetHealthRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
 }
 
 func (c *Client) ListVMs(ctx context.Context, params *ListVMsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -157,6 +145,18 @@ func (c *Client) CreateVM(ctx context.Context, params *CreateVMParams, body Crea
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetHealth(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHealthRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) DeleteVM(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteVMRequest(c.Server, vmId)
 	if err != nil {
@@ -179,33 +179,6 @@ func (c *Client) GetVM(ctx context.Context, vmId openapi_types.UUID, reqEditors 
 		return nil, err
 	}
 	return c.Client.Do(req)
-}
-
-// NewGetHealthRequest generates requests for GetHealth
-func NewGetHealthRequest(server string) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/health")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
 }
 
 // NewListVMsRequest generates requests for ListVMs
@@ -335,6 +308,33 @@ func NewCreateVMRequestWithBody(server string, params *CreateVMParams, contentTy
 	return req, nil
 }
 
+// NewGetHealthRequest generates requests for GetHealth
+func NewGetHealthRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/vms/health")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewDeleteVMRequest generates requests for DeleteVM
 func NewDeleteVMRequest(server string, vmId openapi_types.UUID) (*http.Request, error) {
 	var err error
@@ -446,9 +446,6 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
-	// GetHealthWithResponse request
-	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
-
 	// ListVMsWithResponse request
 	ListVMsWithResponse(ctx context.Context, params *ListVMsParams, reqEditors ...RequestEditorFn) (*ListVMsResponse, error)
 
@@ -457,33 +454,14 @@ type ClientWithResponsesInterface interface {
 
 	CreateVMWithResponse(ctx context.Context, params *CreateVMParams, body CreateVMJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateVMResponse, error)
 
+	// GetHealthWithResponse request
+	GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error)
+
 	// DeleteVMWithResponse request
 	DeleteVMWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteVMResponse, error)
 
 	// GetVMWithResponse request
 	GetVMWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetVMResponse, error)
-}
-
-type GetHealthResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *Health
-}
-
-// Status returns HTTPResponse.Status
-func (r GetHealthResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetHealthResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
 }
 
 type ListVMsResponse struct {
@@ -530,6 +508,28 @@ func (r CreateVMResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CreateVMResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetHealthResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *Health
+}
+
+// Status returns HTTPResponse.Status
+func (r GetHealthResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetHealthResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -585,15 +585,6 @@ func (r GetVMResponse) StatusCode() int {
 	return 0
 }
 
-// GetHealthWithResponse request returning *GetHealthResponse
-func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error) {
-	rsp, err := c.GetHealth(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetHealthResponse(rsp)
-}
-
 // ListVMsWithResponse request returning *ListVMsResponse
 func (c *ClientWithResponses) ListVMsWithResponse(ctx context.Context, params *ListVMsParams, reqEditors ...RequestEditorFn) (*ListVMsResponse, error) {
 	rsp, err := c.ListVMs(ctx, params, reqEditors...)
@@ -620,6 +611,15 @@ func (c *ClientWithResponses) CreateVMWithResponse(ctx context.Context, params *
 	return ParseCreateVMResponse(rsp)
 }
 
+// GetHealthWithResponse request returning *GetHealthResponse
+func (c *ClientWithResponses) GetHealthWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHealthResponse, error) {
+	rsp, err := c.GetHealth(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetHealthResponse(rsp)
+}
+
 // DeleteVMWithResponse request returning *DeleteVMResponse
 func (c *ClientWithResponses) DeleteVMWithResponse(ctx context.Context, vmId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteVMResponse, error) {
 	rsp, err := c.DeleteVM(ctx, vmId, reqEditors...)
@@ -636,32 +636,6 @@ func (c *ClientWithResponses) GetVMWithResponse(ctx context.Context, vmId openap
 		return nil, err
 	}
 	return ParseGetVMResponse(rsp)
-}
-
-// ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
-func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetHealthResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Health
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	}
-
-	return response, nil
 }
 
 // ParseListVMsResponse parses an HTTP response from a ListVMsWithResponse call
@@ -752,6 +726,32 @@ func ParseCreateVMResponse(rsp *http.Response) (*CreateVMResponse, error) {
 			return nil, err
 		}
 		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
+func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetHealthResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Health
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	}
 

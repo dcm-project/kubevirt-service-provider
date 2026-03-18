@@ -161,19 +161,16 @@ type Storage struct {
 
 // VM Virtual Machine
 type VM struct {
-	// Id Unique identifier of the VM
-	Id openapi_types.UUID `json:"id"`
-
 	// Path Resource path identifier
 	Path *string `json:"path,omitempty"`
 
-	// VmSpec Provider-agnostic virtual machine specification.
+	// Spec Provider-agnostic virtual machine specification.
 	//
 	// Includes common fields (service_type, metadata, provider_hints)
 	// plus VM-specific fields for compute, storage, and operating system.
 	//
 	// Providers translate this abstract specification to their native format.
-	VmSpec VMSpec `json:"vm_spec"`
+	Spec VMSpec `json:"spec"`
 }
 
 // VMList Paginated list of VMs
