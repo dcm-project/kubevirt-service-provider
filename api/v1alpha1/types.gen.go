@@ -6,8 +6,7 @@ package v1alpha1
 import (
 	"encoding/json"
 	"fmt"
-
-	openapi_types "github.com/oapi-codegen/runtime/types"
+	"time"
 )
 
 // Defines values for ServiceType.
@@ -37,9 +36,18 @@ type Access struct {
 // CommonFields Common fields included in all service type specifications.
 // These provide versioning, extensibility, and provider-specific configuration.
 type CommonFields struct {
+	// CreateTime Timestamp when the resource was created (RFC 3339)
+	CreateTime *time.Time `json:"create_time,omitempty"`
+
+	// Id Unique identifier for the resource.
+	Id *string `json:"id,omitempty"`
+
 	// Metadata Resource metadata for identification and governance.
 	// Used by all service type specifications.
 	Metadata ServiceMetadata `json:"metadata"`
+
+	// Path Resource path or location within the system hierarchy.
+	Path *string `json:"path,omitempty"`
 
 	// ProviderHints Optional provider-specific configuration.
 	//
@@ -53,6 +61,15 @@ type CommonFields struct {
 	// ServiceType Service type identifier.
 	// Makes the payload self-describing and enables routing/validation.
 	ServiceType ServiceType `json:"service_type"`
+
+	// Status Current status of the resource.
+	Status *string `json:"status,omitempty"`
+
+	// StatusMessage Human-readable message providing details about the current status
+	StatusMessage *string `json:"status_message,omitempty"`
+
+	// UpdateTime Timestamp when the resource was last updated (RFC 3339)
+	UpdateTime *time.Time `json:"update_time,omitempty"`
 }
 
 // Disk Virtual disk specification
@@ -185,9 +202,15 @@ type VMSpec struct {
 	// Access VM access configuration
 	Access *Access `json:"access,omitempty"`
 
+	// CreateTime Timestamp when the resource was created (RFC 3339)
+	CreateTime *time.Time `json:"create_time,omitempty"`
+
 	// GuestOs Guest operating system configuration.
 	// Providers map the OS type to their image catalog.
 	GuestOs GuestOS `json:"guest_os"`
+
+	// Id Unique identifier for the resource.
+	Id *string `json:"id,omitempty"`
 
 	// Memory Memory configuration (RAM)
 	Memory Memory `json:"memory"`
@@ -195,6 +218,9 @@ type VMSpec struct {
 	// Metadata Resource metadata for identification and governance.
 	// Used by all service type specifications.
 	Metadata ServiceMetadata `json:"metadata"`
+
+	// Path Resource path or location within the system hierarchy.
+	Path *string `json:"path,omitempty"`
 
 	// ProviderHints Optional provider-specific configuration.
 	//
@@ -209,8 +235,17 @@ type VMSpec struct {
 	// Makes the payload self-describing and enables routing/validation.
 	ServiceType ServiceType `json:"service_type"`
 
+	// Status Current status of the resource.
+	Status *string `json:"status,omitempty"`
+
+	// StatusMessage Human-readable message providing details about the current status
+	StatusMessage *string `json:"status_message,omitempty"`
+
 	// Storage Storage configuration
 	Storage Storage `json:"storage"`
+
+	// UpdateTime Timestamp when the resource was last updated (RFC 3339)
+	UpdateTime *time.Time `json:"update_time,omitempty"`
 
 	// Vcpu Virtual CPU configuration
 	Vcpu                 Vcpu                   `json:"vcpu"`
@@ -237,7 +272,7 @@ type ListVMsParams struct {
 // CreateVMParams defines parameters for CreateVM.
 type CreateVMParams struct {
 	// Id Optional VM ID for idempotent creation
-	Id *openapi_types.UUID `form:"id,omitempty" json:"id,omitempty"`
+	Id *string `form:"id,omitempty" json:"id,omitempty"`
 }
 
 // CreateVMJSONRequestBody defines body for CreateVM for application/json ContentType.
@@ -623,12 +658,28 @@ func (a *VMSpec) UnmarshalJSON(b []byte) error {
 		delete(object, "access")
 	}
 
+	if raw, found := object["create_time"]; found {
+		err = json.Unmarshal(raw, &a.CreateTime)
+		if err != nil {
+			return fmt.Errorf("error reading 'create_time': %w", err)
+		}
+		delete(object, "create_time")
+	}
+
 	if raw, found := object["guest_os"]; found {
 		err = json.Unmarshal(raw, &a.GuestOs)
 		if err != nil {
 			return fmt.Errorf("error reading 'guest_os': %w", err)
 		}
 		delete(object, "guest_os")
+	}
+
+	if raw, found := object["id"]; found {
+		err = json.Unmarshal(raw, &a.Id)
+		if err != nil {
+			return fmt.Errorf("error reading 'id': %w", err)
+		}
+		delete(object, "id")
 	}
 
 	if raw, found := object["memory"]; found {
@@ -647,6 +698,14 @@ func (a *VMSpec) UnmarshalJSON(b []byte) error {
 		delete(object, "metadata")
 	}
 
+	if raw, found := object["path"]; found {
+		err = json.Unmarshal(raw, &a.Path)
+		if err != nil {
+			return fmt.Errorf("error reading 'path': %w", err)
+		}
+		delete(object, "path")
+	}
+
 	if raw, found := object["provider_hints"]; found {
 		err = json.Unmarshal(raw, &a.ProviderHints)
 		if err != nil {
@@ -663,12 +722,36 @@ func (a *VMSpec) UnmarshalJSON(b []byte) error {
 		delete(object, "service_type")
 	}
 
+	if raw, found := object["status"]; found {
+		err = json.Unmarshal(raw, &a.Status)
+		if err != nil {
+			return fmt.Errorf("error reading 'status': %w", err)
+		}
+		delete(object, "status")
+	}
+
+	if raw, found := object["status_message"]; found {
+		err = json.Unmarshal(raw, &a.StatusMessage)
+		if err != nil {
+			return fmt.Errorf("error reading 'status_message': %w", err)
+		}
+		delete(object, "status_message")
+	}
+
 	if raw, found := object["storage"]; found {
 		err = json.Unmarshal(raw, &a.Storage)
 		if err != nil {
 			return fmt.Errorf("error reading 'storage': %w", err)
 		}
 		delete(object, "storage")
+	}
+
+	if raw, found := object["update_time"]; found {
+		err = json.Unmarshal(raw, &a.UpdateTime)
+		if err != nil {
+			return fmt.Errorf("error reading 'update_time': %w", err)
+		}
+		delete(object, "update_time")
 	}
 
 	if raw, found := object["vcpu"]; found {
@@ -705,9 +788,23 @@ func (a VMSpec) MarshalJSON() ([]byte, error) {
 		}
 	}
 
+	if a.CreateTime != nil {
+		object["create_time"], err = json.Marshal(a.CreateTime)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'create_time': %w", err)
+		}
+	}
+
 	object["guest_os"], err = json.Marshal(a.GuestOs)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling 'guest_os': %w", err)
+	}
+
+	if a.Id != nil {
+		object["id"], err = json.Marshal(a.Id)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'id': %w", err)
+		}
 	}
 
 	object["memory"], err = json.Marshal(a.Memory)
@@ -718,6 +815,13 @@ func (a VMSpec) MarshalJSON() ([]byte, error) {
 	object["metadata"], err = json.Marshal(a.Metadata)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling 'metadata': %w", err)
+	}
+
+	if a.Path != nil {
+		object["path"], err = json.Marshal(a.Path)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'path': %w", err)
+		}
 	}
 
 	if a.ProviderHints != nil {
@@ -732,9 +836,30 @@ func (a VMSpec) MarshalJSON() ([]byte, error) {
 		return nil, fmt.Errorf("error marshaling 'service_type': %w", err)
 	}
 
+	if a.Status != nil {
+		object["status"], err = json.Marshal(a.Status)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'status': %w", err)
+		}
+	}
+
+	if a.StatusMessage != nil {
+		object["status_message"], err = json.Marshal(a.StatusMessage)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'status_message': %w", err)
+		}
+	}
+
 	object["storage"], err = json.Marshal(a.Storage)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling 'storage': %w", err)
+	}
+
+	if a.UpdateTime != nil {
+		object["update_time"], err = json.Marshal(a.UpdateTime)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'update_time': %w", err)
+		}
 	}
 
 	object["vcpu"], err = json.Marshal(a.Vcpu)

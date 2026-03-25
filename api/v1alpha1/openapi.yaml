@@ -83,7 +83,6 @@ paths:
           description: Optional VM ID for idempotent creation
           schema:
             type: string
-            format: uuid
       requestBody:
         required: true
         content:
@@ -345,6 +344,42 @@ components:
         - service_type
         - metadata
       properties:
+        id:
+          type: string
+          description: |
+            Unique identifier for the resource.
+          pattern: ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$
+          readOnly: true
+          example: vm-abc123
+        status:
+          type: string
+          description: |
+            Current status of the resource.
+          readOnly: true
+          example: running
+        status_message:
+          type: string
+          description: Human-readable message providing details about the current status
+          readOnly: true
+          example: Resource is running normally
+        path:
+          type: string
+          description: |
+            Resource path or location within the system hierarchy.
+          readOnly: true
+          example: /production/us-east/compute
+        create_time:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when the resource was created (RFC 3339)
+          example: '2026-01-13T10:30:00Z'
+        update_time:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when the resource was last updated (RFC 3339)
+          example: '2026-01-13T15:45:30Z'
         service_type:
           $ref: '#/components/schemas/ServiceType'
         metadata:

@@ -89,7 +89,7 @@ func (s *KubevirtHandler) ListVMs(ctx context.Context, request server.ListVMsReq
 // (POST /vms)
 func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMRequestObject) (server.CreateVMResponseObject, error) {
 	vmSpec := request.Body
-	vmID := request.Params.Id.String()
+	vmID := *request.Params.Id
 	path := fmt.Sprintf("%svms/%s", APIPrefix, vmID)
 
 	log.Printf("CreateVM called: vmID=%s, body=%+v", vmID, vmSpec)
