@@ -6,11 +6,9 @@ import (
 	"log"
 	"net/http"
 
+	spmv1alpha1 "github.com/dcm-project/service-provider-manager/api/v1alpha1/provider"
+	spmclient "github.com/dcm-project/service-provider-manager/pkg/client/provider"
 	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
-
-	spmv1alpha1 "github.com/dcm-project/service-provider-manager/api/v1alpha1"
-	spmclient "github.com/dcm-project/service-provider-manager/pkg/client"
 
 	"github.com/dcm-project/kubevirt-service-provider/internal/config"
 )
@@ -50,7 +48,7 @@ func (r *Registrar) Register(ctx context.Context) error {
 		return fmt.Errorf("invalid provider ID %q: %w", r.providerCfg.ID, err)
 	}
 
-	providerID := openapi_types.UUID(providerUUID)
+	providerID := providerUUID.String()
 	params := &spmv1alpha1.CreateProviderParams{Id: &providerID}
 
 	provider := spmv1alpha1.Provider{

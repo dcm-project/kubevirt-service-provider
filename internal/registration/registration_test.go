@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	spmv1alpha1 "github.com/dcm-project/service-provider-manager/api/v1alpha1"
+	spmv1alpha1 "github.com/dcm-project/service-provider-manager/api/v1alpha1/provider"
 
 	"github.com/dcm-project/kubevirt-service-provider/internal/config"
 )
@@ -80,7 +80,7 @@ var _ = Describe("Registrar", func() {
 					// Return 201 Created
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusCreated)
-					providerUUID := uuid.MustParse(validUUID)
+					providerUUID := validUUID
 					response := spmv1alpha1.Provider{
 						Id:   &providerUUID,
 						Name: "test-provider",
@@ -105,7 +105,7 @@ var _ = Describe("Registrar", func() {
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
-					providerUUID := uuid.MustParse(validUUID)
+					providerUUID := validUUID
 					response := spmv1alpha1.Provider{
 						Id:   &providerUUID,
 						Name: "test-provider",
