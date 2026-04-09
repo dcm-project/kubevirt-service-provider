@@ -30,17 +30,10 @@ func main() {
 		log.Fatalf("Failed to listen: %v", err)
 	}
 
-	// Register with DCM Service Provider Manager
+	// Create registrar (registration happens after server is ready)
 	registrar, err := registration.NewRegistrar(cfg.ProviderConfig, cfg.ServiceProviderManagerConfig)
 	if err != nil {
 		log.Fatalf("Failed to create DCM registrar: %v", err)
-	}
-
-	regCtx, regCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer regCancel()
-
-	if err := registrar.Register(regCtx); err != nil {
-		log.Fatalf("Failed to register with DCM: %v", err)
 	}
 
 	// Initialize KubeVirt client
@@ -81,7 +74,9 @@ func main() {
 	// Create handler with dependencies
 	handler := handlers.NewKubevirtHandler(kubevirtClient, mapper)
 
-	srv := apiserver.New(cfg, listener, handler)
+	srv := apiserver.New(cfg, listener, handler).WithOnReady(func(ctx context.Context) {
+		registrar.Start(ctx)
+	})
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

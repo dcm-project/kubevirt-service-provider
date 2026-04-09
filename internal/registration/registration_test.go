@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,6 +33,7 @@ var _ = Describe("Registrar", func() {
 			Endpoint:      "http://localhost:8081/api/v1alpha1",
 			ServiceType:   "vm",
 			SchemaVersion: "v1alpha1",
+			HTTPTimeout:   30 * time.Second,
 		}
 	})
 
@@ -54,13 +56,30 @@ var _ = Describe("Registrar", func() {
 			Expect(registrar).NotTo(BeNil())
 			Expect(registrar.providerCfg).To(Equal(providerCfg))
 			Expect(registrar.client).NotTo(BeNil())
+			Expect(registrar.initialBackoff).To(Equal(1 * time.Second))
+			Expect(registrar.maxBackoff).To(Equal(60 * time.Second))
 		})
 
+		It("should accept custom backoff options", func() {
+			testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+			svcMgrCfg = &config.ServiceProviderManagerConfig{
+				Endpoint: testServer.URL,
+			}
+
+			registrar, err := NewRegistrar(providerCfg, svcMgrCfg,
+				SetInitialBackoff(100*time.Millisecond),
+				SetMaxBackoff(5*time.Second),
+			)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(registrar.initialBackoff).To(Equal(100 * time.Millisecond))
+			Expect(registrar.maxBackoff).To(Equal(5 * time.Second))
+		})
 	})
 
-	Describe("Register", func() {
+	Describe("Start", func() {
 		Context("when registration succeeds with new provider", func() {
-			It("should return nil and log registration", func() {
+			It("should complete registration in the background", func() {
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					Expect(r.Method).To(Equal(http.MethodPost))
 					Expect(r.URL.Path).To(Equal("/providers"))
@@ -95,13 +114,13 @@ var _ = Describe("Registrar", func() {
 				registrar, err := NewRegistrar(providerCfg, svcMgrCfg)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = registrar.Register(context.Background())
-				Expect(err).NotTo(HaveOccurred())
+				registrar.Start(context.Background())
+				Eventually(registrar.Done()).Should(BeClosed())
 			})
 		})
 
 		Context("when provider already exists and is updated", func() {
-			It("should return nil and log update", func() {
+			It("should complete registration in the background", func() {
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/json")
 					w.WriteHeader(http.StatusOK)
@@ -120,13 +139,13 @@ var _ = Describe("Registrar", func() {
 				registrar, err := NewRegistrar(providerCfg, svcMgrCfg)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = registrar.Register(context.Background())
-				Expect(err).NotTo(HaveOccurred())
+				registrar.Start(context.Background())
+				Eventually(registrar.Done()).Should(BeClosed())
 			})
 		})
 
-		Context("when there is a conflict", func() {
-			It("should return a conflict error", func() {
+		Context("when there is a non-retryable error", func() {
+			It("should give up on conflict", func() {
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/problem+json")
 					w.WriteHeader(http.StatusConflict)
@@ -144,14 +163,11 @@ var _ = Describe("Registrar", func() {
 				registrar, err := NewRegistrar(providerCfg, svcMgrCfg)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = registrar.Register(context.Background())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("conflict registering provider"))
+				registrar.Start(context.Background())
+				Eventually(registrar.Done()).Should(BeClosed())
 			})
-		})
 
-		Context("when there is a validation error", func() {
-			It("should return a validation error", func() {
+			It("should give up on validation error", func() {
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.Header().Set("Content-Type", "application/problem+json")
 					w.WriteHeader(http.StatusBadRequest)
@@ -169,14 +185,11 @@ var _ = Describe("Registrar", func() {
 				registrar, err := NewRegistrar(providerCfg, svcMgrCfg)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = registrar.Register(context.Background())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("validation error"))
+				registrar.Start(context.Background())
+				Eventually(registrar.Done()).Should(BeClosed())
 			})
-		})
 
-		Context("when the provider ID is invalid", func() {
-			It("should return an error for invalid UUID", func() {
+			It("should give up on invalid UUID", func() {
 				providerCfg.ID = "invalid-uuid"
 
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -190,14 +203,48 @@ var _ = Describe("Registrar", func() {
 				registrar, err := NewRegistrar(providerCfg, svcMgrCfg)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = registrar.Register(context.Background())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("invalid provider ID"))
+				registrar.Start(context.Background())
+				Eventually(registrar.Done()).Should(BeClosed())
 			})
 		})
 
-		Context("when the server returns an unexpected status", func() {
-			It("should return an unexpected response error", func() {
+		Context("when there is a retryable error", func() {
+			It("should retry and eventually succeed", func() {
+				var attempts int32
+				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					attempt := atomic.AddInt32(&attempts, 1)
+					if attempt < 3 {
+						w.WriteHeader(http.StatusInternalServerError)
+						return
+					}
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusCreated)
+					providerUUID := validUUID
+					response := spmv1alpha1.Provider{
+						Id:   &providerUUID,
+						Name: "test-provider",
+					}
+					json.NewEncoder(w).Encode(response)
+				}))
+
+				svcMgrCfg = &config.ServiceProviderManagerConfig{
+					Endpoint: testServer.URL,
+				}
+
+				registrar, err := NewRegistrar(providerCfg, svcMgrCfg,
+					SetInitialBackoff(10*time.Millisecond),
+					SetMaxBackoff(50*time.Millisecond),
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				registrar.Start(context.Background())
+				Eventually(registrar.Done(), 5*time.Second).Should(BeClosed())
+				Expect(atomic.LoadInt32(&attempts)).To(BeNumerically(">=", int32(3)))
+			})
+		})
+
+		Context("when context is cancelled", func() {
+			It("should stop retrying", func() {
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					w.WriteHeader(http.StatusInternalServerError)
 				}))
@@ -206,39 +253,35 @@ var _ = Describe("Registrar", func() {
 					Endpoint: testServer.URL,
 				}
 
-				registrar, err := NewRegistrar(providerCfg, svcMgrCfg)
+				registrar, err := NewRegistrar(providerCfg, svcMgrCfg,
+					SetInitialBackoff(10*time.Millisecond),
+				)
 				Expect(err).NotTo(HaveOccurred())
 
-				err = registrar.Register(context.Background())
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unexpected response status: 500"))
+				ctx, cancel := context.WithCancel(context.Background())
+				registrar.Start(ctx)
+
+				// Give it time to fail at least once then cancel
+				time.Sleep(50 * time.Millisecond)
+				cancel()
+
+				Eventually(registrar.Done()).Should(BeClosed())
 			})
 		})
 
-		Context("when the HTTP request fails", func() {
-			It("should return an error", func() {
-				svcMgrCfg = &config.ServiceProviderManagerConfig{
-					Endpoint: "http://localhost:1", // Port that should fail to connect
-				}
-
-				registrar, err := NewRegistrar(providerCfg, svcMgrCfg)
-				Expect(err).NotTo(HaveOccurred())
-
-				ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
-				defer cancel()
-
-				err = registrar.Register(ctx)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to register provider"))
-			})
-		})
-
-		Context("when context is cancelled", func() {
-			It("should return a context error", func() {
+		Context("when Start is called multiple times", func() {
+			It("should only start one registration goroutine", func() {
+				var attempts int32
 				testServer = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Simulate slow response
-					time.Sleep(1 * time.Second)
-					w.WriteHeader(http.StatusOK)
+					atomic.AddInt32(&attempts, 1)
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusCreated)
+					providerUUID := validUUID
+					response := spmv1alpha1.Provider{
+						Id:   &providerUUID,
+						Name: "test-provider",
+					}
+					json.NewEncoder(w).Encode(response)
 				}))
 
 				svcMgrCfg = &config.ServiceProviderManagerConfig{
@@ -248,12 +291,13 @@ var _ = Describe("Registrar", func() {
 				registrar, err := NewRegistrar(providerCfg, svcMgrCfg)
 				Expect(err).NotTo(HaveOccurred())
 
-				ctx, cancel := context.WithCancel(context.Background())
-				cancel() // Cancel immediately
+				ctx := context.Background()
+				registrar.Start(ctx)
+				registrar.Start(ctx)
+				registrar.Start(ctx)
 
-				err = registrar.Register(ctx)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("failed to register provider"))
+				Eventually(registrar.Done()).Should(BeClosed())
+				Expect(atomic.LoadInt32(&attempts)).To(Equal(int32(1)))
 			})
 		})
 	})
