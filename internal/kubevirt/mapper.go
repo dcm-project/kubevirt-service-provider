@@ -15,18 +15,18 @@ import (
 )
 
 const (
-	osImageUbuntu = "quay.io/containerdisks/ubuntu:latest"
-	osImageCentos = "quay.io/containerdisks/centos-stream:latest"
-	osImageFedora = "quay.io/containerdisks/fedora:latest"
-	osImageDebian = "quay.io/containerdisks/debian:latest"
-	osImageCirros = "quay.io/kubevirt/cirros-container-disk-demo:latest"
+	osImageUbuntu       = "quay.io/containerdisks/ubuntu:latest"
+	osImageCentosStream = "quay.io/containerdisks/centos-stream:latest"
+	osImageFedora       = "quay.io/containerdisks/fedora:latest"
+	osImageDebian       = "quay.io/containerdisks/debian:latest"
+	osImageCirros       = "quay.io/kubevirt/cirros-container-disk-demo:latest"
 )
 
 var (
 	osImages = map[string]string{
 		"ubuntu":        osImageUbuntu,
-		"centos":        osImageCentos,
-		"centos-stream": osImageCentos,
+		"centos":        osImageCentosStream,
+		"centos-stream": osImageCentosStream,
 		"fedora":        osImageFedora,
 		"cirros":        osImageCirros,
 		"debian":        osImageDebian,
