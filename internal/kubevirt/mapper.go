@@ -14,6 +14,26 @@ import (
 	"github.com/dcm-project/kubevirt-service-provider/internal/constants"
 )
 
+const (
+	osImageUbuntu = "quay.io/containerdisks/ubuntu:latest"
+	osImageCentos = "quay.io/containerdisks/centos-stream:latest"
+	osImageFedora = "quay.io/containerdisks/fedora:latest"
+	osImageDebian = "quay.io/containerdisks/debian:latest"
+	osImageCirros = "quay.io/kubevirt/cirros-container-disk-demo:latest"
+)
+
+var (
+	osImages = map[string]string{
+		"ubuntu":        osImageUbuntu,
+		"centos":        osImageCentos,
+		"centos-stream": osImageCentos,
+		"fedora":        osImageFedora,
+		"cirros":        osImageCirros,
+		"debian":        osImageDebian,
+	}
+	defaultOSImage = osImageCirros
+)
+
 // Mapper handles conversion from VMSpec to KubeVirt VirtualMachine resources
 type Mapper struct {
 	namespace string
@@ -204,18 +224,12 @@ func (m *Mapper) buildInterfaces() []kubevirtv1.Interface {
 
 // getContainerDiskImage maps guest OS to container disk image
 func (m *Mapper) getContainerDiskImage(guestOS types.GuestOS) string {
-	switch strings.ToLower(guestOS.Type) {
-	case "ubuntu":
-		return "quay.io/kubevirt/ubuntu-container-disk-demo:latest"
-	case "centos":
-		return "quay.io/kubevirt/centos-container-disk-demo:latest"
-	case "fedora":
-		return "quay.io/kubevirt/fedora-container-disk-demo:latest"
-	case "cirros":
-		return "quay.io/kubevirt/cirros-container-disk-demo:latest"
-	default:
-		return "quay.io/kubevirt/cirros-container-disk-demo:latest"
+	guestOSType := strings.ToLower(guestOS.Type)
+	guestOSImage, ok := osImages[guestOSType]
+	if !ok {
+		return defaultOSImage
 	}
+	return guestOSImage
 }
 
 // parseMemorySize converts memory size string to Kubernetes resource format
