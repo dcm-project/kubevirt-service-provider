@@ -68,54 +68,54 @@ func IsInvalidError(err error) bool {
 }
 
 // MapKubernetesError maps Kubernetes API errors to CreateVM responses.
-func MapKubernetesError(err error) server.CreateVMResponseObject {
+func MapKubernetesError(err error) server.CreateVmResponseObject {
 	if err == nil {
 		return nil
 	}
 	body, statusCode := classifyKubernetesError(err, "Failed to create virtual machine")
-	return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
+	return &server.CreateVmdefaultApplicationProblemPlusJSONResponse{
 		Body:       body,
 		StatusCode: statusCode,
 	}
 }
 
 // MapKubernetesErrorForDelete maps Kubernetes API errors to DeleteVM responses.
-func MapKubernetesErrorForDelete(err error) server.DeleteVMResponseObject {
+func MapKubernetesErrorForDelete(err error) server.DeleteVmResponseObject {
 	if err == nil {
 		return nil
 	}
 	body, statusCode := classifyKubernetesError(err, "Failed to delete virtual machine")
 	if statusCode == http.StatusNotFound {
-		return server.DeleteVM404ApplicationProblemPlusJSONResponse(body)
+		return server.DeleteVm404ApplicationProblemPlusJSONResponse(body)
 	}
-	return server.DeleteVMdefaultApplicationProblemPlusJSONResponse{
+	return server.DeleteVmdefaultApplicationProblemPlusJSONResponse{
 		Body:       body,
 		StatusCode: statusCode,
 	}
 }
 
 // MapKubernetesErrorForGet maps Kubernetes API errors to GetVM responses.
-func MapKubernetesErrorForGet(err error) server.GetVMResponseObject {
+func MapKubernetesErrorForGet(err error) server.GetVmResponseObject {
 	if err == nil {
 		return nil
 	}
 	body, statusCode := classifyKubernetesError(err, "Failed to retrieve virtual machine")
 	if statusCode == http.StatusNotFound {
-		return server.GetVM404ApplicationProblemPlusJSONResponse(body)
+		return server.GetVm404ApplicationProblemPlusJSONResponse(body)
 	}
-	return server.GetVMdefaultApplicationProblemPlusJSONResponse{
+	return server.GetVmdefaultApplicationProblemPlusJSONResponse{
 		Body:       body,
 		StatusCode: statusCode,
 	}
 }
 
 // MapKubernetesErrorForList maps Kubernetes API errors to ListVMs responses.
-func MapKubernetesErrorForList(err error) server.ListVMsResponseObject {
+func MapKubernetesErrorForList(err error) server.ListVmsResponseObject {
 	if err == nil {
 		return nil
 	}
 	body, statusCode := classifyKubernetesError(err, "Failed to list virtual machines")
-	return &server.ListVMsdefaultApplicationProblemPlusJSONResponse{
+	return &server.ListVmsdefaultApplicationProblemPlusJSONResponse{
 		Body:       body,
 		StatusCode: statusCode,
 	}

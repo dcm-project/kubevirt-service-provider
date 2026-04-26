@@ -23,7 +23,7 @@ paths:
       tags:
         - health
       summary: Health check
-      operationId: getHealth
+      operationId: GetHealth
       description: Health check for KubeVirt Service Provider API
       responses:
         '200':
@@ -38,7 +38,7 @@ paths:
       tags:
         - vm
       summary: List all VMs
-      operationId: listVMs
+      operationId: ListVms
       description: Returns a list of virtual machines
       parameters:
         - name: max_page_size
@@ -78,7 +78,7 @@ paths:
       tags:
         - vm
       summary: Create a VM
-      operationId: createVM
+      operationId: CreateVm
       description: |
         Create a new virtual machine.
         The VM will be provisioned on the KubeVirt cluster.
@@ -126,15 +126,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /vms/{vmId}:
+  /vms/{vm}:
     get:
       tags:
         - vm
       summary: Get a VM
-      operationId: getVM
+      operationId: GetVm
       description: Get a virtual machine by its unique ID
       parameters:
-        - name: vmId
+        - name: vm
           in: path
           required: true
           description: Unique identifier of the VM
@@ -169,10 +169,10 @@ paths:
       tags:
         - vm
       summary: Delete a VM
-      operationId: deleteVM
+      operationId: DeleteVm
       description: Delete a virtual machine from the cluster
       parameters:
-        - name: vmId
+        - name: vm
           in: path
           required: true
           description: Unique identifier of the VM to delete
@@ -224,6 +224,7 @@ components:
           readOnly: true
 
     VM:
+      type: object
       description: Virtual Machine
       x-aep-resource:
         type: serviceprovider.dcm.io/vm

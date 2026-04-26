@@ -74,10 +74,10 @@ func newConflictError() error {
 
 var _ = Describe("KubevirtHandler", func() {
 	var (
-		client   *mockVMClient
-		mapper   *mockVMMapper
-		h        *KubevirtHandler
-		ctx      context.Context
+		client *mockVMClient
+		mapper *mockVMMapper
+		h      *KubevirtHandler
+		ctx    context.Context
 		testID string
 	)
 
@@ -112,10 +112,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return newTestVMSpec(), nil
 			}
 
-			resp, err := h.ListVMs(ctx, server.ListVMsRequestObject{})
+			resp, err := h.ListVms(ctx, server.ListVmsRequestObject{})
 
 			Expect(err).NotTo(HaveOccurred())
-			listResp, ok := resp.(server.ListVMs200JSONResponse)
+			listResp, ok := resp.(server.ListVms200JSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(*listResp.Vms).To(HaveLen(1))
 		})
@@ -125,10 +125,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return []kubevirtv1.VirtualMachine{}, nil
 			}
 
-			resp, err := h.ListVMs(ctx, server.ListVMsRequestObject{})
+			resp, err := h.ListVms(ctx, server.ListVmsRequestObject{})
 
 			Expect(err).NotTo(HaveOccurred())
-			listResp, ok := resp.(server.ListVMs200JSONResponse)
+			listResp, ok := resp.(server.ListVms200JSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(*listResp.Vms).To(HaveLen(0))
 		})
@@ -138,10 +138,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return nil, fmt.Errorf("connection refused")
 			}
 
-			resp, err := h.ListVMs(ctx, server.ListVMsRequestObject{})
+			resp, err := h.ListVms(ctx, server.ListVmsRequestObject{})
 
 			Expect(err).NotTo(HaveOccurred())
-			errResp, ok := resp.(*server.ListVMsdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(*server.ListVmsdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusInternalServerError))
 		})
@@ -161,20 +161,20 @@ var _ = Describe("KubevirtHandler", func() {
 				return newTestVMSpec(), nil
 			}
 
-			resp, err := h.ListVMs(ctx, server.ListVMsRequestObject{})
+			resp, err := h.ListVms(ctx, server.ListVmsRequestObject{})
 
 			Expect(err).NotTo(HaveOccurred())
-			listResp, ok := resp.(server.ListVMs200JSONResponse)
+			listResp, ok := resp.(server.ListVms200JSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(*listResp.Vms).To(HaveLen(1))
 		})
 	})
 
 	Describe("CreateVM", func() {
-		var request server.CreateVMRequestObject
+		var request server.CreateVmRequestObject
 
 		BeforeEach(func() {
-			body := server.CreateVMJSONRequestBody{
+			body := server.CreateVmJSONRequestBody{
 				Spec: server.VMSpec{
 					ServiceType: server.Vm,
 					Metadata:    server.ServiceMetadata{Name: "test-vm"},
@@ -184,8 +184,8 @@ var _ = Describe("KubevirtHandler", func() {
 					Storage:     server.Storage{Disks: []server.Disk{{Name: "boot", Capacity: "10Gi"}}},
 				},
 			}
-			request = server.CreateVMRequestObject{
-				Params: server.CreateVMParams{Id: &testID},
+			request = server.CreateVmRequestObject{
+				Params: server.CreateVmParams{Id: &testID},
 				Body:   &body,
 			}
 		})
@@ -201,10 +201,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return newTestVMSpec(), nil
 			}
 
-			resp, err := h.CreateVM(ctx, request)
+			resp, err := h.CreateVm(ctx, request)
 
 			Expect(err).NotTo(HaveOccurred())
-			createResp, ok := resp.(server.CreateVM201JSONResponse)
+			createResp, ok := resp.(server.CreateVm201JSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(*createResp.Path).To(ContainSubstring(testID))
 		})
@@ -217,10 +217,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return nil, newConflictError()
 			}
 
-			resp, err := h.CreateVM(ctx, request)
+			resp, err := h.CreateVm(ctx, request)
 
 			Expect(err).NotTo(HaveOccurred())
-			errResp, ok := resp.(*server.CreateVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(*server.CreateVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusConflict))
 		})
@@ -230,10 +230,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return nil, fmt.Errorf("invalid memory format")
 			}
 
-			resp, err := h.CreateVM(ctx, request)
+			resp, err := h.CreateVm(ctx, request)
 
 			Expect(err).NotTo(HaveOccurred())
-			errResp, ok := resp.(*server.CreateVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(*server.CreateVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusBadRequest))
 		})
@@ -245,10 +245,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return nil
 			}
 
-			resp, err := h.DeleteVM(ctx, server.DeleteVMRequestObject{VmId: testID})
+			resp, err := h.DeleteVm(ctx, server.DeleteVmRequestObject{Vm: testID})
 
 			Expect(err).NotTo(HaveOccurred())
-			_, ok := resp.(server.DeleteVM204Response)
+			_, ok := resp.(server.DeleteVm204Response)
 			Expect(ok).To(BeTrue())
 		})
 
@@ -257,10 +257,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return newNotFoundError()
 			}
 
-			resp, err := h.DeleteVM(ctx, server.DeleteVMRequestObject{VmId: testID})
+			resp, err := h.DeleteVm(ctx, server.DeleteVmRequestObject{Vm: testID})
 
 			Expect(err).NotTo(HaveOccurred())
-			notFoundResp, ok := resp.(server.DeleteVM404ApplicationProblemPlusJSONResponse)
+			notFoundResp, ok := resp.(server.DeleteVm404ApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(*notFoundResp.Status).To(Equal(404))
 		})
@@ -270,10 +270,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return fmt.Errorf("connection refused")
 			}
 
-			resp, err := h.DeleteVM(ctx, server.DeleteVMRequestObject{VmId: testID})
+			resp, err := h.DeleteVm(ctx, server.DeleteVmRequestObject{Vm: testID})
 
 			Expect(err).NotTo(HaveOccurred())
-			errResp, ok := resp.(server.DeleteVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(server.DeleteVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusInternalServerError))
 		})
@@ -288,10 +288,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return newTestVMSpec(), nil
 			}
 
-			resp, err := h.GetVM(ctx, server.GetVMRequestObject{VmId: testID})
+			resp, err := h.GetVm(ctx, server.GetVmRequestObject{Vm: testID})
 
 			Expect(err).NotTo(HaveOccurred())
-			vmResp, ok := resp.(server.GetVM200JSONResponse)
+			vmResp, ok := resp.(server.GetVm200JSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(*vmResp.Path).To(ContainSubstring(testID))
 		})
@@ -301,10 +301,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return nil, newNotFoundError()
 			}
 
-			resp, err := h.GetVM(ctx, server.GetVMRequestObject{VmId: testID})
+			resp, err := h.GetVm(ctx, server.GetVmRequestObject{Vm: testID})
 
 			Expect(err).NotTo(HaveOccurred())
-			notFoundResp, ok := resp.(server.GetVM404ApplicationProblemPlusJSONResponse)
+			notFoundResp, ok := resp.(server.GetVm404ApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(*notFoundResp.Status).To(Equal(404))
 		})
@@ -314,10 +314,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return nil, fmt.Errorf("connection refused")
 			}
 
-			resp, err := h.GetVM(ctx, server.GetVMRequestObject{VmId: testID})
+			resp, err := h.GetVm(ctx, server.GetVmRequestObject{Vm: testID})
 
 			Expect(err).NotTo(HaveOccurred())
-			errResp, ok := resp.(server.GetVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(server.GetVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusInternalServerError))
 		})
@@ -330,10 +330,10 @@ var _ = Describe("KubevirtHandler", func() {
 				return nil, fmt.Errorf("conversion error")
 			}
 
-			resp, err := h.GetVM(ctx, server.GetVMRequestObject{VmId: testID})
+			resp, err := h.GetVm(ctx, server.GetVmRequestObject{Vm: testID})
 
 			Expect(err).NotTo(HaveOccurred())
-			errResp, ok := resp.(server.GetVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(server.GetVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusInternalServerError))
 		})

@@ -3,7 +3,7 @@ name: Check AEP Compliance
 on:
   pull_request:
     paths:
-      - 'api/**/openapi.yaml'
+      - 'api/**/openapi.source.yaml'
       - '.spectral.yaml'
 
 jobs:
@@ -12,9 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install Spectral
-        run: npm install -g @stoplight/spectral-cli
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
 
       - name: Check AEP compliance
         run: make check-aep
-

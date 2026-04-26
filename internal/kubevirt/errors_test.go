@@ -96,7 +96,7 @@ var _ = Describe("Errors", func() {
 		It("should map a non-k8s error to 500", func() {
 			resp := kubevirt.MapKubernetesError(fmt.Errorf("connection refused"))
 
-			errResp, ok := resp.(*server.CreateVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(*server.CreateVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusInternalServerError))
 		})
@@ -105,7 +105,7 @@ var _ = Describe("Errors", func() {
 			err := k8sStatusError(http.StatusConflict, metav1.StatusReasonConflict, "conflict")
 			resp := kubevirt.MapKubernetesError(err)
 
-			errResp, ok := resp.(*server.CreateVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(*server.CreateVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusConflict))
 		})
@@ -114,7 +114,7 @@ var _ = Describe("Errors", func() {
 			err := k8sStatusError(http.StatusUnprocessableEntity, metav1.StatusReasonInvalid, "invalid")
 			resp := kubevirt.MapKubernetesError(err)
 
-			errResp, ok := resp.(*server.CreateVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(*server.CreateVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusUnprocessableEntity))
 		})
@@ -123,7 +123,7 @@ var _ = Describe("Errors", func() {
 			err := k8sStatusError(http.StatusBadRequest, metav1.StatusReasonBadRequest, "bad request")
 			resp := kubevirt.MapKubernetesError(err)
 
-			errResp, ok := resp.(*server.CreateVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(*server.CreateVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusBadRequest))
 		})
@@ -132,7 +132,7 @@ var _ = Describe("Errors", func() {
 			err := k8sStatusError(http.StatusNotFound, metav1.StatusReasonNotFound, "not found")
 			resp := kubevirt.MapKubernetesError(err)
 
-			errResp, ok := resp.(*server.CreateVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(*server.CreateVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusNotFound))
 		})
@@ -141,7 +141,7 @@ var _ = Describe("Errors", func() {
 			err := k8sStatusError(http.StatusForbidden, metav1.StatusReasonForbidden, "forbidden")
 			resp := kubevirt.MapKubernetesError(err)
 
-			errResp, ok := resp.(*server.CreateVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(*server.CreateVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusInternalServerError))
 			Expect(*errResp.Body.Detail).To(Equal("Failed to create virtual machine"))
@@ -158,7 +158,7 @@ var _ = Describe("Errors", func() {
 			err := k8sStatusError(http.StatusNotFound, metav1.StatusReasonNotFound, "not found")
 			resp := kubevirt.MapKubernetesErrorForDelete(err)
 
-			_, ok := resp.(server.DeleteVM404ApplicationProblemPlusJSONResponse)
+			_, ok := resp.(server.DeleteVm404ApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 		})
 
@@ -166,7 +166,7 @@ var _ = Describe("Errors", func() {
 			err := fmt.Errorf("connection refused")
 			resp := kubevirt.MapKubernetesErrorForDelete(err)
 
-			errResp, ok := resp.(server.DeleteVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(server.DeleteVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusInternalServerError))
 		})
@@ -182,7 +182,7 @@ var _ = Describe("Errors", func() {
 			err := k8sStatusError(http.StatusNotFound, metav1.StatusReasonNotFound, "not found")
 			resp := kubevirt.MapKubernetesErrorForGet(err)
 
-			_, ok := resp.(server.GetVM404ApplicationProblemPlusJSONResponse)
+			_, ok := resp.(server.GetVm404ApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 		})
 
@@ -190,7 +190,7 @@ var _ = Describe("Errors", func() {
 			err := fmt.Errorf("connection refused")
 			resp := kubevirt.MapKubernetesErrorForGet(err)
 
-			errResp, ok := resp.(server.GetVMdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(server.GetVmdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusInternalServerError))
 		})
@@ -206,7 +206,7 @@ var _ = Describe("Errors", func() {
 			err := fmt.Errorf("connection refused")
 			resp := kubevirt.MapKubernetesErrorForList(err)
 
-			errResp, ok := resp.(*server.ListVMsdefaultApplicationProblemPlusJSONResponse)
+			errResp, ok := resp.(*server.ListVmsdefaultApplicationProblemPlusJSONResponse)
 			Expect(ok).To(BeTrue())
 			Expect(errResp.StatusCode).To(Equal(http.StatusInternalServerError))
 		})

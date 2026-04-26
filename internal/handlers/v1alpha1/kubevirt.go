@@ -66,7 +66,7 @@ func (s *KubevirtHandler) GetHealth(ctx context.Context, request server.GetHealt
 }
 
 // (GET /vms)
-func (s *KubevirtHandler) ListVMs(ctx context.Context, request server.ListVMsRequestObject) (server.ListVMsResponseObject, error) {
+func (s *KubevirtHandler) ListVms(ctx context.Context, request server.ListVmsRequestObject) (server.ListVmsResponseObject, error) {
 	listOptions := metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("%s=%s", constants.DCMLabelManagedBy, constants.DCMManagedByValue),
 	}
@@ -83,11 +83,11 @@ func (s *KubevirtHandler) ListVMs(ctx context.Context, request server.ListVMsReq
 		}
 		vms = append(vms, *serverVM)
 	}
-	return server.ListVMs200JSONResponse{Vms: &vms}, nil
+	return server.ListVms200JSONResponse{Vms: &vms}, nil
 }
 
 // (POST /vms)
-func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMRequestObject) (server.CreateVMResponseObject, error) {
+func (s *KubevirtHandler) CreateVm(ctx context.Context, request server.CreateVmRequestObject) (server.CreateVmResponseObject, error) {
 	vmSpec := request.Body
 	vmID := *request.Params.Id
 	path := fmt.Sprintf("%svms/%s", APIPrefix, vmID)
@@ -98,7 +98,7 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 	catalogVMSpec, err := createVMRequestToVMSpec(vmSpec)
 	if err != nil {
 		body, statusCode := kubevirt.InternalServerError(fmt.Sprintf("Failed to convert request: %v", err))
-		return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
+		return &server.CreateVmdefaultApplicationProblemPlusJSONResponse{
 			Body:       body,
 			StatusCode: statusCode,
 		}, nil
@@ -107,7 +107,7 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 	virtualMachine, err := s.mapper.VMSpecToVirtualMachine(catalogVMSpec, vmID)
 	if err != nil {
 		body, statusCode := kubevirt.ValidationError(fmt.Sprintf("Failed to convert VMSpec to VirtualMachine: %v", err))
-		return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
+		return &server.CreateVmdefaultApplicationProblemPlusJSONResponse{
 			Body:       body,
 			StatusCode: statusCode,
 		}, nil
@@ -123,7 +123,7 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 	createdVMSpec, err := s.mapper.VirtualMachineToVMSpec(createdVM)
 	if err != nil {
 		body, statusCode := kubevirt.InternalServerError(fmt.Sprintf("Failed to convert created VM: %v", err))
-		return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
+		return &server.CreateVmdefaultApplicationProblemPlusJSONResponse{
 			Body:       body,
 			StatusCode: statusCode,
 		}, nil
@@ -131,28 +131,28 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 	serverVM, err := vmSpecToServerVM(createdVMSpec, &path, vmID)
 	if err != nil {
 		body, statusCode := kubevirt.InternalServerError(fmt.Sprintf("Failed to convert VM spec: %v", err))
-		return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
+		return &server.CreateVmdefaultApplicationProblemPlusJSONResponse{
 			Body:       body,
 			StatusCode: statusCode,
 		}, nil
 	}
-	return server.CreateVM201JSONResponse(*serverVM), nil
+	return server.CreateVm201JSONResponse(*serverVM), nil
 }
 
 // (DELETE /vms/{vmId})
-func (s *KubevirtHandler) DeleteVM(ctx context.Context, request server.DeleteVMRequestObject) (server.DeleteVMResponseObject, error) {
+func (s *KubevirtHandler) DeleteVm(ctx context.Context, request server.DeleteVmRequestObject) (server.DeleteVmResponseObject, error) {
 	// Delete the VM
-	err := s.kubevirtClient.DeleteVirtualMachine(ctx, request.VmId)
+	err := s.kubevirtClient.DeleteVirtualMachine(ctx, request.Vm)
 	if err != nil {
 		return kubevirt.MapKubernetesErrorForDelete(err), nil
 	}
 
-	return server.DeleteVM204Response{}, nil
+	return server.DeleteVm204Response{}, nil
 }
 
 // (GET /vms/{vmId})
-func (s *KubevirtHandler) GetVM(ctx context.Context, request server.GetVMRequestObject) (server.GetVMResponseObject, error) {
-	vmID := request.VmId
+func (s *KubevirtHandler) GetVm(ctx context.Context, request server.GetVmRequestObject) (server.GetVmResponseObject, error) {
+	vmID := request.Vm
 
 	vm, err := s.kubevirtClient.GetVirtualMachine(ctx, vmID)
 	if err != nil {
@@ -161,7 +161,7 @@ func (s *KubevirtHandler) GetVM(ctx context.Context, request server.GetVMRequest
 			title := "Not Found"
 			typ := "about:blank"
 			detail := fmt.Sprintf("Virtual machine with ID %s not found", vmID)
-			return server.GetVM404ApplicationProblemPlusJSONResponse{
+			return server.GetVm404ApplicationProblemPlusJSONResponse{
 				Title:  title,
 				Type:   typ,
 				Status: &status,
@@ -175,7 +175,7 @@ func (s *KubevirtHandler) GetVM(ctx context.Context, request server.GetVMRequest
 	vmSpec, err := s.mapper.VirtualMachineToVMSpec(vm)
 	if err != nil {
 		body, statusCode := kubevirt.InternalServerError(fmt.Sprintf("Failed to convert VirtualMachine to VMSpec: %v", err))
-		return server.GetVMdefaultApplicationProblemPlusJSONResponse{
+		return server.GetVmdefaultApplicationProblemPlusJSONResponse{
 			Body:       body,
 			StatusCode: statusCode,
 		}, nil
@@ -185,12 +185,12 @@ func (s *KubevirtHandler) GetVM(ctx context.Context, request server.GetVMRequest
 	serverVM, err := vmSpecToServerVM(vmSpec, &path, vmID)
 	if err != nil {
 		body, statusCode := kubevirt.InternalServerError(fmt.Sprintf("Failed to convert VM spec: %v", err))
-		return server.GetVMdefaultApplicationProblemPlusJSONResponse{
+		return server.GetVmdefaultApplicationProblemPlusJSONResponse{
 			Body:       body,
 			StatusCode: statusCode,
 		}, nil
 	}
-	return server.GetVM200JSONResponse(*serverVM), nil
+	return server.GetVm200JSONResponse(*serverVM), nil
 }
 
 // extractVMIDFromVM extracts the DCM instance ID from a KubeVirt VM object

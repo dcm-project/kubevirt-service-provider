@@ -63,7 +63,7 @@ var _ = Describe("Converters", func() {
 		})
 
 		It("should return a non-nil VMSpec for valid input", func() {
-			body := &server.CreateVMJSONRequestBody{
+			body := &server.CreateVmJSONRequestBody{
 				Spec: server.VMSpec{
 					ServiceType: server.Vm,
 					Metadata:    server.ServiceMetadata{Name: "test-vm"},

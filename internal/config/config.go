@@ -63,9 +63,9 @@ type EventConfig struct {
 type Config struct {
 	ProviderConfig               *ProviderConfig
 	ServiceProviderManagerConfig *ServiceProviderManagerConfig
-	KubernetesConfig            *KubernetesConfig
-	NATSConfig                  *NATSConfig
-	EventConfig                 *EventConfig
+	KubernetesConfig             *KubernetesConfig
+	NATSConfig                   *NATSConfig
+	EventConfig                  *EventConfig
 }
 
 func Load() (*Config, error) {

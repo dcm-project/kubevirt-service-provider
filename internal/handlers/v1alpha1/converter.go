@@ -27,8 +27,8 @@ func vmSpecToServerVM(vmSpec *types.VMSpec, path *string, id string) (*server.VM
 	return &serverVM, nil
 }
 
-// createVMRequestToVMSpec converts CreateVMJSONRequestBody to VMSpec
-func createVMRequestToVMSpec(createVM *server.CreateVMJSONRequestBody) (*types.VMSpec, error) {
+// createVMRequestToVMSpec converts CreateVmJSONRequestBody to VMSpec
+func createVMRequestToVMSpec(createVM *server.CreateVmJSONRequestBody) (*types.VMSpec, error) {
 	if createVM == nil {
 		return nil, fmt.Errorf("createVM request body is nil")
 	}
