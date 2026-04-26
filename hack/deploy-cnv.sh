@@ -63,62 +63,29 @@ wait_for_csv() {
 
     info "Waiting for subscription '${subscription_name}' CSV in namespace '${namespace}' (timeout: ${CSV_TIMEOUT}s)..."
 
+    # Poll until OLM resolves a CSV name on the subscription
+    local csv_name=""
     while [[ ${elapsed} -lt ${CSV_TIMEOUT} ]]; do
-        local csv_name
-        csv_name=$(oc get subscription -n "${namespace}" "${subscription_name}" -o jsonpath='{.status.currentCSV}' 2>/dev/null || true)
-
+        csv_name=$(oc get subscription.operators.coreos.com -n "${namespace}" "${subscription_name}" -o jsonpath='{.status.currentCSV}' 2>/dev/null || true)
         if [[ -n "${csv_name}" ]]; then
-            local phase
-            phase=$(oc get csv -n "${namespace}" "${csv_name}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-            if [[ "${phase}" == "Succeeded" ]]; then
-                info "CSV '${csv_name}' reached Succeeded phase"
-                return 0
-            fi
-            if [[ "${phase}" == "Failed" ]]; then
-                local reason
-                reason=$(oc get csv -n "${namespace}" "${csv_name}" -o jsonpath='{.status.message}' 2>/dev/null || echo "unknown")
-                die "CSV '${csv_name}' failed: ${reason}"
-            fi
-            warn "  CSV '${csv_name}' phase: ${phase:-Unknown} (${elapsed}s elapsed)"
-        else
-            warn "  No CSV resolved yet for subscription '${subscription_name}' (${elapsed}s elapsed)"
+            break
         fi
-
+        warn "  No CSV resolved yet for subscription '${subscription_name}' (${elapsed}s elapsed)"
         sleep "${interval}"
         elapsed=$((elapsed + interval))
     done
+    [[ -z "${csv_name}" ]] && die "Timed out after ${CSV_TIMEOUT}s waiting for subscription '${subscription_name}' to resolve a CSV"
 
-    die "Timed out after ${CSV_TIMEOUT}s waiting for subscription '${subscription_name}' CSV to reach Succeeded"
-}
-
-wait_for_resource() {
-    local resource_type="$1"
-    local resource_name="$2"
-    local ns_flag="$3"
-    local jsonpath="$4"
-    local expected="$5"
-    local timeout="$6"
-    local elapsed=0
-    local interval=30
-
-    info "Waiting for ${resource_type}/${resource_name} to reach '${expected}' (timeout: ${timeout}s)..."
-
-    while [[ ${elapsed} -lt ${timeout} ]]; do
-        local current
-        # shellcheck disable=SC2086
-        current=$(oc get "${resource_type}" "${resource_name}" ${ns_flag} -o jsonpath="${jsonpath}" 2>/dev/null || echo "")
-
-        if [[ "${current}" == "${expected}" ]]; then
-            info "${resource_type}/${resource_name} reached '${expected}'"
-            return 0
-        fi
-
-        warn "  ${resource_type}/${resource_name}: ${current:-<not set>} (${elapsed}s elapsed)"
-        sleep "${interval}"
-        elapsed=$((elapsed + interval))
-    done
-
-    die "Timed out after ${timeout}s waiting for ${resource_type}/${resource_name} to reach '${expected}'"
+    local remaining=$(( CSV_TIMEOUT - elapsed ))
+    info "CSV '${csv_name}' resolved — waiting for Succeeded phase (${remaining}s remaining)..."
+    if ! oc wait csv/"${csv_name}" -n "${namespace}" --for=jsonpath='{.status.phase}'=Succeeded --timeout="${remaining}s" 2>/dev/null; then
+        local phase
+        phase=$(oc get csv -n "${namespace}" "${csv_name}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+        local message
+        message=$(oc get csv -n "${namespace}" "${csv_name}" -o jsonpath='{.status.message}' 2>/dev/null || echo "")
+        die "CSV '${csv_name}' did not reach Succeeded (phase: ${phase}): ${message:-timeout}"
+    fi
+    info "CSV '${csv_name}' reached Succeeded phase"
 }
 
 deploy_cnv() {
@@ -217,7 +184,11 @@ spec:
     disableMDevConfiguration: true
 "
 
-    wait_for_resource "hyperconverged" "kubevirt-hyperconverged" "-n ${namespace}" '{.status.conditions[?(@.type=="Available")].status}' "True" "${DEPLOY_TIMEOUT}"
+    info "Waiting for HyperConverged to become Available (timeout: ${DEPLOY_TIMEOUT}s)..."
+    if ! oc wait hyperconverged/kubevirt-hyperconverged -n "${namespace}" --for=condition=Available --timeout="${DEPLOY_TIMEOUT}s" 2>/dev/null; then
+        die "Timed out after ${DEPLOY_TIMEOUT}s waiting for HyperConverged to become Available"
+    fi
+    info "HyperConverged is Available"
 
     info ""
     info "========================================"
