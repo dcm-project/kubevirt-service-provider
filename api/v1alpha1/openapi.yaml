@@ -284,7 +284,7 @@ components:
         - container
         - database
         - cluster
-        - three_tier_app_demo
+        - three-tier-app-demo
       example: vm
     ServiceMetadata:
       type: object
