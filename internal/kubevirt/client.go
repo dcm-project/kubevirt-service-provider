@@ -3,6 +3,7 @@ package kubevirt
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -10,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	kubevirtv1 "kubevirt.io/api/core/v1"
@@ -22,6 +24,7 @@ import (
 type Client struct {
 	restClient    *rest.RESTClient
 	dynamicClient dynamic.Interface
+	kubeClient    kubernetes.Interface
 	namespace     string
 	timeout       time.Duration
 	maxRetries    int
@@ -91,13 +94,31 @@ func NewClient(cfg *config.KubernetesConfig) (*Client, error) {
 		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
 	}
 
+	// Create standard Kubernetes clientset for health checks
+	kubeClient, err := kubernetes.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Kubernetes clientset: %w", err)
+	}
+
 	return &Client{
 		restClient:    restClient,
 		dynamicClient: dynamicClient,
+		kubeClient:    kubeClient,
 		namespace:     cfg.Namespace,
 		timeout:       cfg.Timeout,
 		maxRetries:    cfg.MaxRetries,
 	}, nil
+}
+
+// CheckHealth verifies the backing Kubernetes cluster is reachable by calling
+// the API server's version discovery endpoint.
+func (c *Client) CheckHealth(_ context.Context) error {
+	_, err := c.kubeClient.Discovery().ServerVersion()
+	if err != nil {
+		log.Printf("Warning: kubernetes health check failed: %v", err)
+		return err
+	}
+	return nil
 }
 
 // CreateVirtualMachine creates a new VirtualMachine in the cluster

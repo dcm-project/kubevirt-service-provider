@@ -16,6 +16,7 @@ type VMClient interface {
 	ListVirtualMachines(ctx context.Context, options metav1.ListOptions) ([]kubevirtv1.VirtualMachine, error)
 	DeleteVirtualMachine(ctx context.Context, vmID string) error
 	UpdateVirtualMachine(ctx context.Context, vm *kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error)
+	CheckHealth(ctx context.Context) error
 }
 
 // VMMapper defines the operations the handler needs for VM spec conversion.

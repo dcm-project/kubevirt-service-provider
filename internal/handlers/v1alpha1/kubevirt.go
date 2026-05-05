@@ -57,7 +57,10 @@ func (s *KubevirtHandler) kubevirtVMToServerVM(vm *kubevirtv1.VirtualMachine) (*
 
 // (GET /health)
 func (s *KubevirtHandler) GetHealth(ctx context.Context, request server.GetHealthRequestObject) (server.GetHealthResponseObject, error) {
-	status := "ok"
+	status := "healthy"
+	if err := s.kubevirtClient.CheckHealth(ctx); err != nil {
+		status = "unhealthy"
+	}
 	path := fmt.Sprintf("%shealth", APIPrefix)
 	return server.GetHealth200JSONResponse{
 		Status: &status,
