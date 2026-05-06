@@ -90,13 +90,27 @@ var _ = Describe("KubevirtHandler", func() {
 	})
 
 	Describe("GetHealth", func() {
-		It("should return 200 with status ok", func() {
+		It("should return 200 with status healthy when cluster is reachable", func() {
+			client.checkHealthFn = func(_ context.Context) error { return nil }
+
 			resp, err := h.GetHealth(ctx, server.GetHealthRequestObject{})
 
 			Expect(err).NotTo(HaveOccurred())
 			healthResp, ok := resp.(server.GetHealth200JSONResponse)
 			Expect(ok).To(BeTrue())
-			Expect(*healthResp.Status).To(Equal("ok"))
+			Expect(*healthResp.Status).To(Equal("healthy"))
+			Expect(*healthResp.Path).To(Equal("/api/v1alpha1/health"))
+		})
+
+		It("should return 200 with status unhealthy when cluster is unreachable", func() {
+			client.checkHealthFn = func(_ context.Context) error { return fmt.Errorf("connection refused") }
+
+			resp, err := h.GetHealth(ctx, server.GetHealthRequestObject{})
+
+			Expect(err).NotTo(HaveOccurred())
+			healthResp, ok := resp.(server.GetHealth200JSONResponse)
+			Expect(ok).To(BeTrue())
+			Expect(*healthResp.Status).To(Equal("unhealthy"))
 			Expect(*healthResp.Path).To(Equal("/api/v1alpha1/health"))
 		})
 	})

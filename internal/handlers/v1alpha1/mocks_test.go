@@ -12,11 +12,12 @@ import (
 
 // mockVMClient implements VMClient for testing.
 type mockVMClient struct {
-	createFn func(ctx context.Context, vm *kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error)
-	getFn    func(ctx context.Context, vmID string) (*kubevirtv1.VirtualMachine, error)
-	listFn   func(ctx context.Context, options metav1.ListOptions) ([]kubevirtv1.VirtualMachine, error)
-	deleteFn func(ctx context.Context, vmID string) error
-	updateFn func(ctx context.Context, vm *kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error)
+	createFn      func(ctx context.Context, vm *kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error)
+	getFn         func(ctx context.Context, vmID string) (*kubevirtv1.VirtualMachine, error)
+	listFn        func(ctx context.Context, options metav1.ListOptions) ([]kubevirtv1.VirtualMachine, error)
+	deleteFn      func(ctx context.Context, vmID string) error
+	updateFn      func(ctx context.Context, vm *kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error)
+	checkHealthFn func(ctx context.Context) error
 }
 
 func (m *mockVMClient) CreateVirtualMachine(ctx context.Context, vm *kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error) {
@@ -52,6 +53,13 @@ func (m *mockVMClient) UpdateVirtualMachine(ctx context.Context, vm *kubevirtv1.
 		return m.updateFn(ctx, vm)
 	}
 	return nil, fmt.Errorf("updateFn not set")
+}
+
+func (m *mockVMClient) CheckHealth(ctx context.Context) error {
+	if m.checkHealthFn != nil {
+		return m.checkHealthFn(ctx)
+	}
+	return nil
 }
 
 // mockVMMapper implements VMMapper for testing.
