@@ -205,6 +205,9 @@ var _ = Describe("KubevirtHandler", func() {
 		})
 
 		It("should create a VM successfully and return 201", func() {
+			client.getFn = func(_ context.Context, _ string) (*kubevirtv1.VirtualMachine, error) {
+				return nil, newNotFoundError()
+			}
 			mapper.vmSpecToVMFn = func(_ *types.VMSpec, _ string) (*kubevirtv1.VirtualMachine, error) {
 				return newTestVM(testID), nil
 			}
@@ -223,7 +226,87 @@ var _ = Describe("KubevirtHandler", func() {
 			Expect(*createResp.Path).To(ContainSubstring(testID))
 		})
 
+		It("should return 409 when VM with same instance ID already exists", func() {
+			client.getFn = func(_ context.Context, id string) (*kubevirtv1.VirtualMachine, error) {
+				Expect(id).To(Equal(testID))
+				return newTestVM(testID), nil
+			}
+			mapperCalled := false
+			mapper.vmSpecToVMFn = func(_ *types.VMSpec, _ string) (*kubevirtv1.VirtualMachine, error) {
+				mapperCalled = true
+				return nil, fmt.Errorf("should not be called")
+			}
+			createCalled := false
+			client.createFn = func(_ context.Context, _ *kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error) {
+				createCalled = true
+				return nil, fmt.Errorf("should not be called")
+			}
+
+			resp, err := h.CreateVM(ctx, request)
+
+			Expect(err).NotTo(HaveOccurred())
+			conflictResp, ok := resp.(server.CreateVM409ApplicationProblemPlusJSONResponse)
+			Expect(ok).To(BeTrue())
+			Expect(*conflictResp.Status).To(Equal(http.StatusConflict))
+			Expect(*conflictResp.Detail).To(ContainSubstring(testID))
+			Expect(mapperCalled).To(BeFalse())
+			Expect(createCalled).To(BeFalse())
+		})
+
+		It("should proceed to create when get returns nil VM with no error", func() {
+			client.getFn = func(_ context.Context, _ string) (*kubevirtv1.VirtualMachine, error) {
+				return nil, nil
+			}
+			mapper.vmSpecToVMFn = func(_ *types.VMSpec, _ string) (*kubevirtv1.VirtualMachine, error) {
+				return newTestVM(testID), nil
+			}
+			createCalled := false
+			client.createFn = func(_ context.Context, vm *kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error) {
+				createCalled = true
+				return vm, nil
+			}
+			mapper.vmToVMSpecFn = func(_ *kubevirtv1.VirtualMachine) (*types.VMSpec, error) {
+				return newTestVMSpec(), nil
+			}
+
+			resp, err := h.CreateVM(ctx, request)
+
+			Expect(err).NotTo(HaveOccurred())
+			_, ok := resp.(server.CreateVM201JSONResponse)
+			Expect(ok).To(BeTrue())
+			Expect(createCalled).To(BeTrue())
+		})
+
+		It("should proceed to create when get returns error", func() {
+			createCalled := false
+			client.getFn = func(_ context.Context, id string) (*kubevirtv1.VirtualMachine, error) {
+				Expect(id).To(Equal(testID))
+				return nil, fmt.Errorf("not found")
+			}
+			mapper.vmSpecToVMFn = func(_ *types.VMSpec, _ string) (*kubevirtv1.VirtualMachine, error) {
+				return newTestVM(testID), nil
+			}
+			client.createFn = func(_ context.Context, vm *kubevirtv1.VirtualMachine) (*kubevirtv1.VirtualMachine, error) {
+				createCalled = true
+				return vm, nil
+			}
+			mapper.vmToVMSpecFn = func(_ *kubevirtv1.VirtualMachine) (*types.VMSpec, error) {
+				return newTestVMSpec(), nil
+			}
+
+			resp, err := h.CreateVM(ctx, request)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(createCalled).To(BeTrue())
+			createResp, ok := resp.(server.CreateVM201JSONResponse)
+			Expect(ok).To(BeTrue())
+			Expect(*createResp.Path).To(ContainSubstring(testID))
+		})
+
 		It("should return error when client create fails", func() {
+			client.getFn = func(_ context.Context, _ string) (*kubevirtv1.VirtualMachine, error) {
+				return nil, newNotFoundError()
+			}
 			mapper.vmSpecToVMFn = func(_ *types.VMSpec, _ string) (*kubevirtv1.VirtualMachine, error) {
 				return newTestVM(testID), nil
 			}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	kubevirtv1 "kubevirt.io/api/core/v1"
@@ -104,6 +105,17 @@ func (s *KubevirtHandler) CreateVM(ctx context.Context, request server.CreateVMR
 		return &server.CreateVMdefaultApplicationProblemPlusJSONResponse{
 			Body:       body,
 			StatusCode: statusCode,
+		}, nil
+	}
+
+	if existing, err := s.kubevirtClient.GetVirtualMachine(ctx, vmID); err == nil && existing != nil {
+		status := http.StatusConflict
+		detail := fmt.Sprintf("VM with instance ID %s already exists", vmID)
+		return server.CreateVM409ApplicationProblemPlusJSONResponse{
+			Title:  "Conflict",
+			Type:   "about:blank",
+			Status: &status,
+			Detail: &detail,
 		}, nil
 	}
 
