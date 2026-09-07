@@ -12,6 +12,7 @@ import (
 	"github.com/dcm-project/kubevirt-service-provider/api/v1alpha1"
 	"github.com/dcm-project/kubevirt-service-provider/internal/api/server"
 	"github.com/dcm-project/kubevirt-service-provider/internal/config"
+	"github.com/dcm-project/kubevirt-service-provider/internal/kubevirt"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -71,10 +72,7 @@ func (s *Server) Run(ctx context.Context) error {
 			AuthenticationFunc: openapi3filter.NoopAuthenticationFunc,
 		},
 		SilenceServersWarning: true,
-		ErrorHandler: func(w http.ResponseWriter, message string, statusCode int) {
-			log.Printf("OpenAPI validation error (status %d): %s", statusCode, message)
-			http.Error(w, message, statusCode)
-		},
+		ErrorHandler:          openAPIValidationErrorHandler,
 	}))
 
 	server.HandlerFromMuxWithBaseURL(
@@ -124,6 +122,18 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func openAPIValidationErrorHandler(w http.ResponseWriter, message string, statusCode int) {
+	log.Printf("OpenAPI validation error (status %d): %s", statusCode, message)
+	title := "Validation Error"
+	if statusCode != http.StatusBadRequest {
+		title = http.StatusText(statusCode)
+		if title == "" {
+			title = "Error"
+		}
+	}
+	kubevirt.WriteProblem(w, statusCode, title, message)
 }
 
 func (s *Server) waitForReady(ctx context.Context, addr string) error {
